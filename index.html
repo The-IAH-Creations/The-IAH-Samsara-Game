@@ -108,6 +108,16 @@
             width: 50px; height: 50px; background: rgba(255,255,255,0.4);
             border-radius: 50%; position: absolute; top: 35px; left: 35px;
         }
+        
+        #puzzleStatus {
+            position: absolute; top: 80px; left: 20px; font-size: 14px;
+            color: var(--gold); font-weight: bold; letter-spacing: 2px;
+            text-transform: uppercase; display: none; z-index: 20;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+            background: rgba(10, 10, 15, 0.7); padding: 10px 15px;
+            border-left: 3px solid var(--gold); border-radius: 4px;
+        }
+        
         #mobileAction {
             display: none; position: absolute; bottom: 30px; right: 30px; z-index: 30;
             width: 80px; height: 80px; background: rgba(255, 0, 85, 0.3);
@@ -135,6 +145,7 @@
         Artifacts <span id="uiArtifacts">0 / 3</span>
         Power <span id="uiPower">1.0x</span>
     </div>
+    <div id="puzzleStatus">Sequence: [ _ _ _ ]</div>
 
     <div id="hintBtn" class="ui-panel">AI Agent (Hint)</div>
     <div id="storeBtn" class="ui-panel">Premium Vault</div>
@@ -170,6 +181,15 @@
         let playerHealth = 100;
         let isGameRunning = false;
         
+        let aiModel = { 
+            shots: 0, hits: 0, 
+            playstyle: 'neutral', 
+            sequenceLength: 3, currentSequenceIndex: 0, expectedSequence: []
+        };
+        let runes = [];
+        let particles;
+        const puzzleStatus = document.getElementById('puzzleStatus');
+
         // Environment Size constraints based on chapter (increases exploration time)
         let worldBounds = 300; 
 
@@ -206,6 +226,31 @@
         moonLight.shadow.camera.top = 200;
         moonLight.shadow.camera.bottom = -200;
         scene.add(moonLight);
+
+        const pointLight1 = new THREE.PointLight(varPrimaryColorHex(), 2.5, 120);
+        pointLight1.position.set(20, 15, -20);
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(varAccentColorHex(), 2.5, 120);
+        pointLight2.position.set(-20, 15, 20);
+        scene.add(pointLight2);
+
+        function createAmbientParticles() {
+            const partGeo = new THREE.BufferGeometry();
+            const partCount = 2000;
+            const posArray = new Float32Array(partCount * 3);
+            for(let i = 0; i < partCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 500; // Wide cinematic spread
+            }
+            partGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const partMat = new THREE.PointsMaterial({
+                size: 0.6, color: varGoldColorHex(), transparent: true, opacity: 0.5,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            particles = new THREE.Points(partGeo, partMat);
+            scene.add(particles);
+        }
+        createAmbientParticles();
 
         // Player Controls (Desktop PointerLock)
         const controls = new THREE.PointerLockControls(camera, document.body);
@@ -374,6 +419,7 @@
         
         function varPrimaryColorHex() { return 0x00ffcc; }
         function varAccentColorHex() { return 0xff0055; }
+        function varGoldColorHex() { return 0xffd700; }
 
         function createArtifact(x, z) {
             const geo = new THREE.IcosahedronGeometry(1.5, 0);
@@ -436,19 +482,32 @@
                 this.armR.rotation.x = -Math.sin(time * 1.5) * 0.5;
 
                 const distToPlayer = this.group.position.distanceTo(playerPos);
+                
+                // Adaptive AI speeds
+                let adaptedSpeed = this.speed;
+                if (aiModel.playstyle === 'evasive') adaptedSpeed *= 1.35; 
 
                 // State Machine
-                if (distToPlayer < 40) {
+                if (distToPlayer < 45) {
                     this.state = 'chase';
                 } else {
                     this.state = 'patrol';
                 }
 
                 if (this.state === 'chase') {
-                    this.targetPoint.copy(playerPos);
+                    // Smart erratic dodging based on player aggression analysis
+                    if (aiModel.playstyle === 'aggressive') {
+                        const dodgeX = Math.sin(time * 6 + this.group.position.x) * 6;
+                        const dodgeZ = Math.cos(time * 6 + this.group.position.z) * 6;
+                        this.targetPoint.copy(playerPos).add(new THREE.Vector3(dodgeX, 0, dodgeZ));
+                    } else {
+                        this.targetPoint.copy(playerPos);
+                    }
+
                     // Attack logic
                     if (distToPlayer < 5) {
-                        playerTakeDamage(10 * delta); // Continuous drain if too close
+                        playerTakeDamage(10 * delta); 
+                        aiModel.hits++; // Feed NLP agent seamlessly
                     }
                 } else if (this.state === 'patrol') {
                     // Random movement - change target if close
@@ -463,7 +522,7 @@
 
                 // Move towards target
                 const dir = new THREE.Vector3().subVectors(this.targetPoint, this.group.position).normalize();
-                this.group.position.addScaledVector(dir, this.speed * delta);
+                this.group.position.addScaledVector(dir, adaptedSpeed * delta);
                 
                 // Look at target (smooth rotation)
                 const targetRotation = Math.atan2(dir.x, dir.z);
@@ -488,6 +547,65 @@
             }
         }
 
+        class SequenceRune {
+            constructor(x, z, index, colorId) {
+                this.index = index;
+                this.colorId = colorId; 
+                this.colors = [varPrimaryColorHex(), varAccentColorHex(), varGoldColorHex()];
+                this.active = true;
+                
+                this.group = new THREE.Group();
+                
+                const geo = new THREE.OctahedronGeometry(1.8, 0);
+                this.mat = new THREE.MeshStandardMaterial({ 
+                    color: this.colors[colorId], emissive: this.colors[colorId], 
+                    emissiveIntensity: 0.6, wireframe: true 
+                });
+                this.mesh = new THREE.Mesh(geo, this.mat);
+                this.mesh.position.y = 6;
+                
+                // Magical binding ring
+                const ringGeo = new THREE.TorusGeometry(2.5, 0.1, 4, 16);
+                this.ringMat = new THREE.MeshBasicMaterial({ color: this.colors[colorId], transparent: true, opacity: 0.4 });
+                this.ring = new THREE.Mesh(ringGeo, this.ringMat);
+                this.ring.rotation.x = Math.PI / 2;
+                this.ring.position.y = 6;
+                
+                // Pedestal base
+                const pedGeo = new THREE.CylinderGeometry(0.8, 1.5, 4, 6);
+                const pedMat = new THREE.MeshStandardMaterial({ color: 0x222225, roughness: 0.9, metalness: 0.5 });
+                const pedestal = new THREE.Mesh(pedGeo, pedMat);
+                pedestal.position.y = 2;
+                
+                this.group.add(this.mesh, this.ring, pedestal);
+                this.group.position.set(x, 0, z);
+                scene.add(this.group);
+                
+                this.boundingBox = new THREE.Box3();
+            }
+            
+            update(delta) {
+                if(!this.active) return;
+                this.mesh.rotation.y += 1.5 * delta;
+                this.mesh.rotation.z += 0.5 * delta;
+                this.ring.rotation.z -= 1.0 * delta;
+                this.mesh.position.y = 6 + Math.sin(Date.now()*0.003 + this.index) * 0.8;
+                this.ring.position.y = this.mesh.position.y;
+                this.boundingBox.setFromObject(this.mesh);
+            }
+            
+            hit() {
+                if(!this.active) return false;
+                this.active = false;
+                this.mat.emissiveIntensity = 0.1;
+                this.mat.wireframe = false;
+                this.mat.color.setHex(0x333333);
+                this.ring.visible = false;
+                playCollectSound();
+                return true;
+            }
+        }
+
         function generateWorld(chap) {
             // Clear old level
             collidableObjects.forEach(obj => scene.remove(obj));
@@ -496,10 +614,33 @@
             artifacts.length = 0;
             enemies.forEach(e => scene.remove(e.group));
             enemies.length = 0;
+            runes.forEach(r => scene.remove(r.group));
+            runes.length = 0;
             
+            if (aiModel.shots > 20 && aiModel.hits < 5) aiModel.playstyle = 'aggressive';
+            else if (aiModel.hits >= 15) aiModel.playstyle = 'evasive';
+            else aiModel.playstyle = 'neutral';
+            
+            aiModel.shots = 0; aiModel.hits = 0; // Seamless reset
+            
+            // Generate Sequence Puzzle
+            aiModel.sequenceLength = Math.min(3 + Math.floor(chap/2), 7);
+            aiModel.expectedSequence = [];
+            aiModel.currentSequenceIndex = 0;
+            
+            for(let i=0; i<aiModel.sequenceLength; i++) {
+                // Ensure runes are reasonably close to center for puzzle solving
+                const rX = (Math.random() - 0.5) * 80;
+                const rZ = (Math.random() - 0.5) * 80;
+                const cId = Math.floor(Math.random() * 3);
+                runes.push(new SequenceRune(rX, rZ, i, cId));
+                aiModel.expectedSequence.push(cId);
+            }
+            updatePuzzleUI();
+
             // Expand world bounds per chapter
             worldBounds = 200 + (chap * 100); 
-            artifactsRequired = 3 + chap;
+            artifactsRequired = 1; // Only 1 artifact drops after puzzle
             artifactsCollected = 0;
             updateHUD();
 
@@ -521,15 +662,11 @@
                 }
             }
 
-            // Spawn Artifacts at random locations
-            for(let i=0; i<artifactsRequired; i++) {
-                const x = (Math.random() - 0.5) * (worldBounds * 1.5);
-                const z = (Math.random() - 0.5) * (worldBounds * 1.5);
-                createArtifact(x, z);
-            }
+            // Spawn Artifacts at random locations - REMOVED (Artifacts now locked behind Puzzle)
 
-            // Spawn Enemies (number scales with chapter)
-            const enemyCount = 5 + (chap * 3);
+            // Spawn Enemies (number scales with chapter and AI evaluation)
+            const baseMultiplier = aiModel.playstyle === 'evasive' ? 4 : 3;
+            const enemyCount = 5 + (chap * baseMultiplier);
             for(let i=0; i<enemyCount; i++) {
                 const x = (Math.random() - 0.5) * worldBounds;
                 const z = (Math.random() - 0.5) * worldBounds;
@@ -546,6 +683,7 @@
         function fireWeapon() {
             if (!isGameRunning) return;
             playShootSound();
+            aiModel.shots++; // Invisible NLP Training metric
 
             const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
             const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -586,6 +724,16 @@
                     }
                 }
 
+                if(!hit) {
+                    for (let j = 0; j < runes.length; j++) {
+                        if (runes[j].active && pBox.intersectsBox(runes[j].boundingBox)) {
+                            hit = true;
+                            if(runes[j].hit()) handleRuneHit(j);
+                            break;
+                        }
+                    }
+                }
+
                 // Check walls (simple distance check for performance)
                 if(!hit) {
                     for(let col of collidableObjects) {
@@ -623,6 +771,60 @@
                     }
                 }
             }
+        }
+
+        function handleRuneHit(index) {
+            const hitColor = runes[index].colorId;
+            const expectedColor = aiModel.expectedSequence[aiModel.currentSequenceIndex];
+            
+            if(hitColor === expectedColor) {
+                // Correct Move
+                aiModel.currentSequenceIndex++;
+                updatePuzzleUI();
+                
+                if(aiModel.currentSequenceIndex >= aiModel.sequenceLength) {
+                    puzzleStatus.innerText = "SEQUENCE ACCEPTED. ARTIFACT REVEALED.";
+                    puzzleStatus.style.color = "#00ffcc";
+                    // Deploy main artifact safely in front of player
+                    const dir = new THREE.Vector3();
+                    camera.getWorldDirection(dir);
+                    const spawnPos = controls.getObject().position.clone().addScaledVector(dir, 15);
+                    createArtifact(spawnPos.x, spawnPos.z);
+                }
+            } else {
+                // Tactical Failure - AI spawns punishment Elite
+                puzzleStatus.innerText = "SEQUENCE FAILED. ASURA AWAKENED.";
+                puzzleStatus.style.color = "#ff0055";
+                
+                const p = controls.getObject().position;
+                enemies.push(new HumanoidEnemy(p.x + 15, p.z - 15, chapter * 2.5)); // Elite Punishment
+                
+                // Reset logic
+                setTimeout(() => {
+                    aiModel.currentSequenceIndex = 0;
+                    runes.forEach(r => { 
+                        r.active = true; 
+                        r.mat.emissiveIntensity = 0.6; 
+                        r.mat.wireframe = true;
+                        r.mat.color.setHex(r.colors[r.colorId]);
+                        r.ring.visible = true;
+                    });
+                    updatePuzzleUI();
+                }, 2500);
+            }
+        }
+
+        function updatePuzzleUI() {
+            puzzleStatus.style.display = 'block';
+            puzzleStatus.style.color = '#ffd700';
+            const colorNames = ['CYAN', 'RED', 'GOLD'];
+            let seqText = "Sequence: [ ";
+            for(let i=0; i<aiModel.sequenceLength; i++) {
+                if(i < aiModel.currentSequenceIndex) seqText += "OK ";
+                else seqText += colorNames[aiModel.expectedSequence[i]] + " ";
+            }
+            seqText += "]";
+            puzzleStatus.innerText = seqText;
         }
 
         function advanceChapter() {
@@ -755,7 +957,12 @@
         });
 
         document.getElementById('hintBtn').addEventListener('click', () => {
-            showModal("AI Agent Insight", `Observation: The Asura minion behavior adapts in Chapter ${chapter}.<br><br>Strategy: Keep moving randomly to avoid their attacks. Collect the glowing artifacts to force a structural reset of this realm. Avoid edges past ${worldBounds} meters.`);
+            let nlpAnalysis = `Agent Profiling: Protocol [${aiModel.playstyle.toUpperCase()}]. `;
+            if (aiModel.playstyle === 'aggressive') nlpAnalysis += `You utilize excess force. The simulation is responding with unpredictable dodging mechanics. `;
+            else if (aiModel.playstyle === 'evasive') nlpAnalysis += `High damage taken. The simulation is increasing hostile entity density to overwhelm you. `;
+            else nlpAnalysis += `Standard baseline detected. `;
+
+            showModal("AI Agent Insight", `${nlpAnalysis}<br><br>Strategy: To break the cycle, you must now decode the Resonance Sequence. Read the sequence at the top left and shoot the floating geometric runes (Cyan, Red, Gold) in that exact order to spawn the Chapter Artifact. Incorrect sequences will spawn elite executioners.`);
         });
 
         document.getElementById('storeBtn').addEventListener('click', () => {
@@ -768,6 +975,10 @@
             requestAnimationFrame(animate);
             const time = performance.now();
             const delta = Math.min((time - prevTime) / 1000, 0.1); // Cap delta to prevent huge jumps
+            
+            if(particles) {
+                particles.rotation.y += 0.03 * delta;
+            }
             
             if (isGameRunning) {
                 // Movement Logic (Combines WASD and Touch Joystick)
@@ -815,6 +1026,10 @@
                 const curPos = controls.getObject().position;
                 for(let enemy of enemies) {
                     enemy.update(delta, curPos);
+                }
+                
+                for(let rune of runes) {
+                    rune.update(delta);
                 }
 
                 // Update Systems
