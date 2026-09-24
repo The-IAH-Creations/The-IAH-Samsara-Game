@@ -165,8 +165,16 @@
             box-shadow: 0 0 20px rgba(255, 0, 85, 0.5);
         }
 
+        #mobileJump {
+            display: none; position: absolute; bottom: 120px; right: 32px; z-index: 35;
+            width: 60px; height: 60px; background: rgba(0, 255, 204, 0.4);
+            border-radius: 50%; border: 2px solid var(--primary); color: white;
+            font-weight: 800; text-align: center; line-height: 60px; font-size: 11px;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+        }
+
         @media (max-width: 768px) {
-            #mobileControls, #mobileAction { display: block; }
+            #mobileControls, #mobileAction, #mobileJump { display: block; }
             .ui-panel { font-size: 10px; padding: 10px 14px; }
             #weaponBar { width: 90%; justify-content: center; }
             .weapon-slot { width: 60px; height: 50px; font-size: 9px; }
@@ -243,6 +251,7 @@
         </div>
     </div>
     <div id="mobileAction">ATTACK</div>
+    <div id="mobileJump">JUMP</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
@@ -621,6 +630,7 @@
         const direction = new THREE.Vector3();
         const moveState = { forward: false, backward: false, left: false, right: false };
         const speed = 160.0;
+        let canJump = true;
         
         let isMobile = window.innerWidth <= 768;
         let touchMoveX = 0, touchMoveY = 0;
@@ -937,6 +947,12 @@
                 case 'KeyA': moveState.left = true; break;
                 case 'KeyS': moveState.backward = true; break;
                 case 'KeyD': moveState.right = true; break;
+                case 'Space': 
+                    if (canJump) {
+                        velocity.y += 120;
+                        canJump = false;
+                    }
+                    break;
                 case 'Digit1': selectWeapon(0); break;
                 case 'Digit2': selectWeapon(1); break;
                 case 'Digit3': selectWeapon(2); break;
@@ -962,6 +978,7 @@
         const joyBase = document.getElementById('joystickMove');
         const joyStick = document.getElementById('stickMove');
         const actionBtn = document.getElementById('mobileAction');
+        const jumpBtn = document.getElementById('mobileJump');
         let joyCenterX, joyCenterY, isDraggingJoy = false;
 
         joyBase.addEventListener('touchstart', (e) => {
@@ -987,6 +1004,14 @@
         });
 
         actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack(); });
+
+        jumpBtn.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            if (canJump) {
+                velocity.y += 120;
+                canJump = false;
+            }
+        });
 
         function showModal(title, text) {
             isGameRunning = false;
@@ -1022,6 +1047,7 @@
                 // Movement
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 350.0 * delta; // Gravity
 
                 let dZ = Number(moveState.forward) - Number(moveState.backward) - touchMoveY;
                 let dX = Number(moveState.right) - Number(moveState.left) + touchMoveX;
@@ -1033,7 +1059,14 @@
 
                 controls.moveRight(-velocity.x * delta);
                 controls.moveForward(-velocity.z * delta);
-                controls.getObject().position.y = 4; // Eye height
+                
+                controls.getObject().position.y += (velocity.y * delta);
+
+                if (controls.getObject().position.y < 4) { // Floor collision at eye height
+                    velocity.y = 0;
+                    controls.getObject().position.y = 4;
+                    canJump = true;
+                }
 
                 const playerPos = controls.getObject().position;
 
