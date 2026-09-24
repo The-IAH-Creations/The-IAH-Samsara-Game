@@ -3,545 +3,673 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="The IAH: Samsara - A AAA Japanese-style first-person exploration game featuring ancient Indian mythology, real-world locations, and infinite strategy.">
-    <title>The IAH: Samsara</title>
+    <meta name="description" content="The IAH: Samsara - Next-Gen AAA First-Person Mythological Exploration featuring Samurai Weapons, Real-World Landmarks, Celestial Lights & Dim-Light Sanctums.">
+    <title>The IAH: Samsara - Next-Gen Edition</title>
+    
     <style>
         :root {
             --primary: #00ffcc;
             --accent: #ff0055;
             --gold: #ffd700;
-            --bg-overlay: rgba(0, 0, 0, 0.75);
+            --dim-blue: #3a86ff;
+            --bg-overlay: rgba(5, 5, 10, 0.85);
         }
         
+        * { box-sizing: border-box; }
+
         body, html { 
             margin: 0; padding: 0; overflow: hidden; 
-            background-color: #050505; 
+            background-color: #030308; 
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            user-select: none;
-            -webkit-user-select: none;
+            user-select: none; -webkit-user-select: none;
+            width: 100%; height: 100%;
         }
         
         #gameCanvas { 
             display: block; width: 100vw; height: 100vh; 
         }
         
-        /* UI Elements */
+        /* Crosshair & Aim Visuals */
         #crosshair { 
-            position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; 
-            background: var(--primary); border-radius: 50%; 
+            position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; 
+            border: 2px solid var(--primary); border-radius: 50%; 
             transform: translate(-50%, -50%); pointer-events: none; 
-            box-shadow: 0 0 10px var(--primary);
-            z-index: 10;
+            box-shadow: 0 0 12px var(--primary); z-index: 10;
+            transition: transform 0.1s ease;
+        }
+        #crosshair.slashing {
+            transform: translate(-50%, -50%) scale(2.5);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent);
         }
         
+        /* Glassmorphism Panels */
         .ui-panel {
-            position: absolute; padding: 12px 24px; 
-            background: rgba(10, 10, 15, 0.85); 
-            border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(4px);
-            color: #fff; border-radius: 8px; 
-            text-transform: uppercase; letter-spacing: 1.5px; 
-            font-size: 12px; font-weight: 600;
-            z-index: 20;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: absolute; padding: 12px 20px; 
+            background: rgba(10, 12, 20, 0.75); 
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            color: #fff; border-radius: 12px; 
+            text-transform: uppercase; letter-spacing: 1.2px; 
+            font-size: 11px; font-weight: 700; z-index: 20;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         }
 
-        #hud { top: 20px; left: 20px; border-left: 3px solid var(--primary); }
-        #hud span { color: var(--primary); font-size: 16px; font-weight: 800; display: block; margin-top: 5px;}
+        #hud { top: 20px; left: 20px; border-left: 4px solid var(--primary); min-width: 220px; }
+        #hud .value { color: var(--primary); font-size: 15px; font-weight: 800; display: block; margin-top: 2px;}
         
-        #hintBtn { 
-            top: 20px; right: 20px; cursor: pointer; 
-            transition: all 0.3s ease; border-right: 3px solid var(--gold);
-        }
-        #hintBtn:hover { background: rgba(255, 215, 0, 0.2); }
-        
-        #storeBtn { 
-            top: 75px; right: 20px; cursor: pointer; 
-            transition: all 0.3s ease; border-right: 3px solid var(--accent);
-        }
-        #storeBtn:hover { background: rgba(255, 0, 85, 0.2); }
+        /* Health & Exposure Status Bars */
+        .status-container { margin-top: 8px; }
+        .bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.2s ease; }
+        #hpFill { background: linear-gradient(90deg, #ff0055, #ff5500); }
+        #sanctuaryFill { background: linear-gradient(90deg, #00ffcc, #3a86ff); width: 0%; }
 
-        /* Custom Modal (Replaces alerts) */
+        #topRightBtns { top: 20px; right: 20px; display: flex; gap: 10px; }
+        .icon-btn { cursor: pointer; transition: all 0.3s ease; border-right: 3px solid var(--gold); }
+        .icon-btn:hover { background: rgba(255, 215, 0, 0.25); transform: translateY(-2px); }
+
+        /* Weapon Select Hotbar */
+        #weaponBar {
+            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 12px; z-index: 25; background: rgba(8, 10, 18, 0.8);
+            padding: 8px 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+        }
+        .weapon-slot {
+            width: 75px; height: 60px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05); color: #888; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; font-size: 10px; cursor: pointer;
+            transition: all 0.2s ease; font-weight: bold;
+        }
+        .weapon-slot .key-num { font-size: 9px; opacity: 0.6; margin-bottom: 2px; }
+        .weapon-slot .icon { font-size: 18px; margin-bottom: 2px; }
+        .weapon-slot.active {
+            border-color: var(--primary); color: #fff; background: rgba(0, 255, 204, 0.15);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.3); transform: scale(1.05);
+        }
+
+        /* Notifications & Safe Zone Indicator */
+        #sanctuaryBanner {
+            position: absolute; top: 85px; left: 50%; transform: translateX(-50%);
+            padding: 10px 24px; border-radius: 30px; background: rgba(0, 255, 204, 0.15);
+            border: 1px solid var(--primary); color: var(--primary); font-size: 12px;
+            font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.4); display: none; z-index: 30;
+            backdrop-filter: blur(6px); animation: pulseGlow 2s infinite alternate;
+        }
+        @keyframes pulseGlow {
+            from { box-shadow: 0 0 10px rgba(0,255,204,0.3); }
+            to { box-shadow: 0 0 25px rgba(0,255,204,0.8); }
+        }
+
+        #puzzleStatus {
+            position: absolute; top: 135px; left: 20px; font-size: 12px;
+            color: var(--gold); font-weight: 800; letter-spacing: 1.5px;
+            text-transform: uppercase; display: none; z-index: 20;
+            background: rgba(10, 10, 15, 0.8); padding: 10px 16px;
+            border-left: 3px solid var(--gold); border-radius: 6px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        /* Modal Overlay System */
         #modalOverlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: var(--bg-overlay); backdrop-filter: blur(8px);
-            display: flex; justify-content: center; align-items: center;
-            z-index: 100;
+            background: var(--bg-overlay); backdrop-filter: blur(12px);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
         }
         #modalBox {
-            background: #111; border: 1px solid #333; border-radius: 12px;
-            padding: 40px; text-align: center; color: white; max-width: 500px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            background: rgba(15, 18, 28, 0.95); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px; padding: 35px 45px; text-align: center; color: white;
+            max-width: 550px; width: 90%; box-shadow: 0 25px 60px rgba(0,0,0,0.9);
             position: relative; overflow: hidden;
         }
         #modalBox::before {
             content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--accent));
+            background: linear-gradient(90deg, var(--primary), var(--accent), var(--gold));
         }
-        #modalTitle { font-size: 24px; margin-bottom: 15px; color: var(--gold); font-weight: 800; letter-spacing: 2px;}
-        #modalText { font-size: 15px; color: #aaa; margin-bottom: 30px; line-height: 1.6; }
+        #modalTitle { font-size: 26px; margin-bottom: 12px; color: var(--gold); font-weight: 800; letter-spacing: 2px;}
+        #modalText { font-size: 14px; color: #ccc; margin-bottom: 28px; line-height: 1.7; text-align: left; }
         .btn {
-            background: linear-gradient(45deg, #222, #333); color: white;
-            border: 1px solid #555; padding: 12px 30px; font-size: 14px;
-            border-radius: 6px; cursor: pointer; text-transform: uppercase;
-            letter-spacing: 1px; transition: all 0.3s; font-weight: bold;
+            background: linear-gradient(135deg, #111827, #1f2937); color: #fff;
+            border: 1px solid var(--primary); padding: 14px 32px; font-size: 13px;
+            border-radius: 8px; cursor: pointer; text-transform: uppercase;
+            letter-spacing: 1.5px; transition: all 0.3s ease; font-weight: 800;
+            box-shadow: 0 4px 15px rgba(0, 255, 204, 0.2);
         }
-        .btn:hover { background: #fff; color: #000; border-color: #fff; }
+        .btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 25px var(--primary); }
 
-        /* Damage Overlay */
+        /* Damage Vignette */
         #damageOverlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle, transparent 40%, rgba(255,0,0,0.4) 100%);
-            opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.2s;
+            background: radial-gradient(circle, transparent 40%, rgba(255,0,85,0.5) 100%);
+            opacity: 0; pointer-events: none; z-index: 15; transition: opacity 0.2s ease;
         }
 
         /* Mobile Controls */
-        #mobileControls {
-            display: none; position: absolute; bottom: 30px; left: 30px; z-index: 30;
-        }
+        #mobileControls { display: none; position: absolute; bottom: 30px; left: 25px; z-index: 35; }
         .joystick-base {
-            width: 120px; height: 120px; background: rgba(255,255,255,0.1);
-            border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);
-            position: relative;
+            width: 110px; height: 110px; background: rgba(255,255,255,0.08);
+            border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); position: relative;
         }
         .joystick-stick {
-            width: 50px; height: 50px; background: rgba(255,255,255,0.4);
-            border-radius: 50%; position: absolute; top: 35px; left: 35px;
+            width: 45px; height: 45px; background: rgba(0,255,204,0.5);
+            border-radius: 50%; position: absolute; top: 32px; left: 32px;
+            box-shadow: 0 0 10px var(--primary);
         }
-        
-        #puzzleStatus {
-            position: absolute; top: 80px; left: 20px; font-size: 14px;
-            color: var(--gold); font-weight: bold; letter-spacing: 2px;
-            text-transform: uppercase; display: none; z-index: 20;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
-            background: rgba(10, 10, 15, 0.7); padding: 10px 15px;
-            border-left: 3px solid var(--gold); border-radius: 4px;
-        }
-        
         #mobileAction {
-            display: none; position: absolute; bottom: 30px; right: 30px; z-index: 30;
-            width: 80px; height: 80px; background: rgba(255, 0, 85, 0.3);
-            border-radius: 50%; border: 2px solid var(--accent);
-            color: white; font-weight: bold; text-align: center; line-height: 80px;
+            display: none; position: absolute; bottom: 30px; right: 25px; z-index: 35;
+            width: 75px; height: 75px; background: rgba(255, 0, 85, 0.4);
+            border-radius: 50%; border: 2px solid var(--accent); color: white;
+            font-weight: 800; text-align: center; line-height: 75px; font-size: 13px;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.5);
         }
 
         @media (max-width: 768px) {
             #mobileControls, #mobileAction { display: block; }
-            .ui-panel { font-size: 10px; padding: 8px 12px; }
-            #hud span { font-size: 14px; }
-            #modalBox { width: 85%; padding: 25px; }
+            .ui-panel { font-size: 10px; padding: 10px 14px; }
+            #weaponBar { width: 90%; justify-content: center; }
+            .weapon-slot { width: 60px; height: 50px; font-size: 9px; }
+            #modalBox { padding: 25px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- UI Overlay -->
     <canvas id="gameCanvas"></canvas>
     <div id="crosshair"></div>
     <div id="damageOverlay"></div>
+    <div id="sanctuaryBanner">✦ Dim Light Sanctuary — Progress Auto-Saved ✦</div>
     
     <div id="hud" class="ui-panel">
-        Chapter <span id="uiChapter">I : The Awakening</span>
-        Artifacts <span id="uiArtifacts">0 / 3</span>
-        Power <span id="uiPower">1.0x</span>
+        <div>Realm Iteration: <span id="uiChapter" class="value">I : Kyoto Spires</span></div>
+        <div>Resonance Artifacts: <span id="uiArtifacts" class="value">0 / 1</span></div>
+        
+        <div class="status-container">
+            <div>Vitality</div>
+            <div class="bar-bg"><div id="hpFill" class="bar-fill"></div></div>
+        </div>
+        <div class="status-container">
+            <div>Dim Light Sanctum Energy</div>
+            <div class="bar-bg"><div id="sanctuaryFill" class="bar-fill"></div></div>
+        </div>
     </div>
-    <div id="puzzleStatus">Sequence: [ _ _ _ ]</div>
 
-    <div id="hintBtn" class="ui-panel">AI Agent (Hint)</div>
-    <div id="storeBtn" class="ui-panel">Premium Vault</div>
+    <div id="puzzleStatus">Resonance Sequence: [ _ _ _ ]</div>
+
+    <div id="topRightBtns">
+        <div id="hintBtn" class="ui-panel icon-btn">🤖 AI Insight</div>
+        <div id="storeBtn" class="ui-panel icon-btn">💎 Vault</div>
+    </div>
+
+    <!-- Weapon Hotbar -->
+    <div id="weaponBar">
+        <div class="weapon-slot active" id="slotKatana" onclick="selectWeapon(0)">
+            <span class="key-num">[1]</span>
+            <span class="icon">🗡️</span>
+            <span>Katana</span>
+        </div>
+        <div class="weapon-slot" id="slotBow" onclick="selectWeapon(1)">
+            <span class="key-num">[2]</span>
+            <span class="icon">🏹</span>
+            <span>Arc Bow</span>
+        </div>
+        <div class="weapon-slot" id="slotOrb" onclick="selectWeapon(2)">
+            <span class="key-num">[3]</span>
+            <span class="icon">🔮</span>
+            <span>Chakra Orb</span>
+        </div>
+    </div>
 
     <!-- Custom Modal System -->
     <div id="modalOverlay">
         <div id="modalBox">
             <h1 id="modalTitle">The IAH: Samsara</h1>
-            <p id="modalText">Explore the corrupted real-world simulation generated by the ancient Asura. <br><br><b>Controls:</b> WASD to Move, Mouse to Look, Left Click to Shoot. Collect glowing artifacts to break the cycle and advance chapters.</p>
+            <div id="modalText">
+                Step into the corrupted ancient simulation governed by the Asura.<br><br>
+                <b>🌟 Celestial Sky Lights:</b> Illuminate the landscape, revealing hidden real-world shrines and ancient landmarks.<br>
+                <b>⛩️ Dim Light Sanctums:</b> Retreat into the soft dim sanctuary pillars to recover vitality, reduce exposure peril, and <b>auto-save progress</b>.<br>
+                <b>🗡️ Weapons & Combat:</b> Swap between Samurai Katana, Arc Bow, and Chakra Cannon using <b>Keys 1-3</b>. Left click or tap to attack!<br>
+                <b>🕹️ Controls:</b> WASD to move, Mouse to look.
+            </div>
             <button class="btn" id="startBtn">Enter Samsara</button>
         </div>
     </div>
 
-    <!-- Mobile Controls -->
+    <!-- Mobile Touch UI -->
     <div id="mobileControls">
         <div class="joystick-base" id="joystickMove">
             <div class="joystick-stick" id="stickMove"></div>
         </div>
     </div>
-    <div id="mobileAction">SHOOT</div>
+    <div id="mobileAction">ATTACK</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <!-- Tone.js for Audio processing (No external URLs used) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 
     <script>
-        // Game State Variables
         let chapter = 1;
         let artifactsCollected = 0;
-        let artifactsRequired = 3;
+        let artifactsRequired = 1;
         let playerPower = 1.0;
         let playerHealth = 100;
+        let sanctuaryEnergy = 100;
+        let inSanctuary = false;
         let isGameRunning = false;
         
+        // AI Profiler Engine
         let aiModel = { 
             shots: 0, hits: 0, 
             playstyle: 'neutral', 
             sequenceLength: 3, currentSequenceIndex: 0, expectedSequence: []
         };
+
+        // Weapon System State
+        let currentWeaponIndex = 0; // 0: Katana, 1: Arc Bow, 2: Chakra Orb
+        let isAttacking = false;
+        let attackCooldown = false;
+        let weaponSwingAngle = 0;
+
+        // Arrays for Game Logic
         let runes = [];
         let particles;
-        const puzzleStatus = document.getElementById('puzzleStatus');
+        let sanctums = [];
+        const collidableObjects = [];
+        const enemies = [];
+        const artifacts = [];
+        const projectiles = [];
 
-        // Environment Size constraints based on chapter (increases exploration time)
-        let worldBounds = 300; 
-
-        // DOM Elements
+        // DOM Element Cache
         const uiChapter = document.getElementById('uiChapter');
         const uiArtifacts = document.getElementById('uiArtifacts');
-        const uiPower = document.getElementById('uiPower');
+        const hpFill = document.getElementById('hpFill');
+        const sanctuaryFill = document.getElementById('sanctuaryFill');
+        const sanctuaryBanner = document.getElementById('sanctuaryBanner');
         const damageOverlay = document.getElementById('damageOverlay');
+        const puzzleStatus = document.getElementById('puzzleStatus');
+        const crosshair = document.getElementById('crosshair');
 
-        // Three.js Setup
         const canvas = document.getElementById('gameCanvas');
         const scene = new THREE.Scene();
         
-        // AAA Vibe: Mystical dark fog fusing Japanese Sakura night with Indian ancient stone
-        scene.background = new THREE.Color(0x0a0510);
-        scene.fog = new THREE.FogExp2(0x0a0510, 0.015);
+        // Dark mystical twilight fog
+        scene.background = new THREE.Color(0x060712);
+        scene.fog = new THREE.FogExp2(0x060712, 0.012);
 
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimize for high DPI
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        // Lighting (Cinematic)
-        const ambientLight = new THREE.AmbientLight(0x222233, 1.5);
+        // Sky Lights & Ambient Illumination
+        const ambientLight = new THREE.AmbientLight(0x1a2035, 1.2);
         scene.add(ambientLight);
-        
-        const moonLight = new THREE.DirectionalLight(0xaaccff, 0.8);
-        moonLight.position.set(100, 200, 50);
-        moonLight.castShadow = true;
-        moonLight.shadow.camera.left = -200;
-        moonLight.shadow.camera.right = 200;
-        moonLight.shadow.camera.top = 200;
-        moonLight.shadow.camera.bottom = -200;
-        scene.add(moonLight);
 
-        const pointLight1 = new THREE.PointLight(varPrimaryColorHex(), 2.5, 120);
-        pointLight1.position.set(20, 15, -20);
-        scene.add(pointLight1);
+        // Major Sky Light Source 1 (Celestial Radiant Moon Beacon)
+        const skyLight1 = new THREE.DirectionalLight(0xa0e0ff, 1.5);
+        skyLight1.position.set(120, 250, 80);
+        skyLight1.castShadow = true;
+        skyLight1.shadow.mapSize.width = 2048;
+        skyLight1.shadow.mapSize.height = 2048;
+        skyLight1.shadow.camera.near = 0.5;
+        skyLight1.shadow.camera.far = 500;
+        skyLight1.shadow.camera.left = -200;
+        skyLight1.shadow.camera.right = 200;
+        skyLight1.shadow.camera.top = 200;
+        skyLight1.shadow.camera.bottom = -200;
+        scene.add(skyLight1);
+
+        // Major Sky Light Source 2 (Ethereal Golden Aurora Light)
+        const skyLight2 = new THREE.DirectionalLight(0xffd700, 0.8);
+        skyLight2.position.set(-150, 200, -100);
+        scene.add(skyLight2);
+
+        // Floating Sky Light Orbs Visuals
+        function createSkyLightBeacons() {
+            const skyGroup = new THREE.Group();
+            for (let i = 0; i < 5; i++) {
+                const orbGeo = new THREE.SphereGeometry(6, 16, 16);
+                const orbMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x00ffcc : 0xffd700 });
+                const orb = new THREE.Mesh(orbGeo, orbMat);
+                const angle = (i / 5) * Math.PI * 2;
+                orb.position.set(Math.cos(angle) * 180, 120 + i * 15, Math.sin(angle) * 180);
+                
+                const pLight = new THREE.PointLight(orbMat.color, 2, 150);
+                orb.add(pLight);
+                skyGroup.add(orb);
+            }
+            scene.add(skyGroup);
+        }
+        createSkyLightBeacons();
+
+        let synthBGM, synthAction, synthSlash, synthChime;
         
-        const pointLight2 = new THREE.PointLight(varAccentColorHex(), 2.5, 120);
-        pointLight2.position.set(-20, 15, 20);
-        scene.add(pointLight2);
+        function initAudio() {
+            Tone.start();
+            
+            // Atmospheric Ambient BGM Drone
+            synthBGM = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 0.8, modulationIndex: 1.5,
+                oscillator: { type: "sine" },
+                envelope: { attack: 1.5, decay: 2, sustain: 0.7, release: 2 }
+            }).toDestination();
+            synthBGM.volume.value = -18;
+
+            // Pentatonic Arpeggio Loop (Asian/Indian Mythological Fusion)
+            const notes = ["C3", "Eb3", "F3", "G3", "Bb3", "C4", "Eb4"];
+            const pattern = new Tone.Pattern((time, note) => {
+                synthBGM.triggerAttackRelease(note, "4n", time);
+            }, notes, "random");
+            pattern.interval = "8n";
+            Tone.Transport.start();
+            pattern.start(0);
+
+            // Ranged Attack Synth
+            synthAction = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.1 }
+            }).toDestination();
+            synthAction.volume.value = -8;
+
+            // Katana Metallic Slash Synth
+            synthSlash = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 }
+            }).toDestination();
+            synthSlash.volume.value = -6;
+
+            // Dim Light Sanctuary Chime
+            synthChime = new Tone.PolySynth(Tone.AMSynth).toDestination();
+            synthChime.volume.value = -10;
+        }
+
+        function playWeaponSound(type) {
+            if (!synthAction) return;
+            if (type === 'katana') {
+                synthSlash.triggerAttackRelease("16n");
+            } else if (type === 'bow') {
+                synthAction.triggerAttackRelease(["E4", "B4"], "8n");
+            } else if (type === 'orb') {
+                synthAction.triggerAttackRelease(["C3", "G3"], "4n");
+            }
+        }
+
+        function playSanctuaryChime() {
+            if (synthChime) synthChime.triggerAttackRelease(["C5", "G5", "C6"], "2n");
+        }
+
+        const weaponGroup = new THREE.Group();
+        camera.add(weaponGroup);
+        scene.add(camera);
+
+        // Katana 3D Model
+        const katanaMesh = new THREE.Group();
+        // Blade
+        const bladeGeo = new THREE.BoxGeometry(0.04, 1.8, 0.08);
+        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95, roughness: 0.1, emissive: 0x00ffcc, emissiveIntensity: 0.3 });
+        const blade = new THREE.Mesh(bladeGeo, bladeMat);
+        blade.position.set(0, 0.9, 0);
+        // Guard
+        const guardGeo = new THREE.BoxGeometry(0.2, 0.03, 0.2);
+        const guardMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8 });
+        const guard = new THREE.Mesh(guardGeo, guardMat);
+        guard.position.set(0, 0, 0);
+        // Handle
+        const handleGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8);
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const handle = new THREE.Mesh(handleGeo, handleMat);
+        handle.position.set(0, -0.2, 0);
+        katanaMesh.add(blade, guard, handle);
+        katanaMesh.position.set(0.4, -0.3, -0.6);
+        katanaMesh.rotation.set(0.2, -0.3, -0.4);
+
+        // Arc Bow 3D Model
+        const bowMesh = new THREE.Group();
+        const bowCurveGeo = new THREE.TorusGeometry(0.6, 0.03, 8, 24, Math.PI);
+        const bowMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff, emissive: 0x3a86ff, emissiveIntensity: 0.6 });
+        const bowLimbs = new THREE.Mesh(bowCurveGeo, bowMat);
+        bowLimbs.rotation.y = Math.PI / 2;
+        const bowCore = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+        bowMesh.add(bowLimbs, bowCore);
+        bowMesh.position.set(0.4, -0.2, -0.7);
+        bowMesh.visible = false;
+
+        // Chakra Orb 3D Model
+        const orbMesh = new THREE.Group();
+        const mainOrb = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.25, 1),
+            new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 0.8, wireframe: true })
+        );
+        const orbRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.4, 0.02, 8, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffd700 })
+        );
+        orbRing.rotation.x = Math.PI / 3;
+        orbMesh.add(mainOrb, orbRing);
+        orbMesh.position.set(0.4, -0.2, -0.6);
+        orbMesh.visible = false;
+
+        weaponGroup.add(katanaMesh, bowMesh, orbMesh);
+
+        function selectWeapon(index) {
+            currentWeaponIndex = index;
+            katanaMesh.visible = (index === 0);
+            bowMesh.visible = (index === 1);
+            orbMesh.visible = (index === 2);
+
+            document.querySelectorAll('.weapon-slot').forEach((el, i) => {
+                if (i === index) el.classList.add('active');
+                else el.classList.remove('active');
+            });
+        }
+
+        // Ground Terrain with subtle wave displacement
+        const floorGeo = new THREE.PlaneGeometry(1600, 1600, 64, 64);
+        const pos = floorGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            pos.setZ(i, Math.sin(pos.getX(i)*0.03) * Math.cos(pos.getY(i)*0.03) * 3);
+        }
+        floorGeo.computeVertexNormals();
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0f18, roughness: 0.85, metalness: 0.2 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Real-World Landmark Generator 1: Varanasi River Ghats & Sacred Steps
+        function createVaranasiGhats(x, z) {
+            const ghatGroup = new THREE.Group();
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0x22222b, roughness: 0.9 });
+            
+            // Tiered Stone Steps
+            for (let i = 0; i < 6; i++) {
+                const stepGeo = new THREE.BoxGeometry(40 - i * 4, 1.2, 80);
+                const step = new THREE.Mesh(stepGeo, stoneMat);
+                step.position.set(0, i * 1.2, i * 3);
+                step.receiveShadow = true; step.castShadow = true;
+                ghatGroup.add(step);
+            }
+
+            // Floating Illuminated Diyas / River Lanterns
+            for (let j = 0; j < 8; j++) {
+                const diyaGeo = new THREE.CylinderGeometry(0.8, 0.4, 0.4, 8);
+                const diyaMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff5500, emissiveIntensity: 1 });
+                const diya = new THREE.Mesh(diyaGeo, diyaMat);
+                diya.position.set((Math.random() - 0.5) * 30, 0.5, 25 + Math.random() * 20);
+                ghatGroup.add(diya);
+            }
+            ghatGroup.position.set(x, 0, z);
+            scene.add(ghatGroup);
+        }
+
+        // Real-World Landmark Generator 2: Kyoto Bamboo Forest Clumps
+        function createKyotoBambooCluster(x, z) {
+            const bambooGroup = new THREE.Group();
+            const stalkMat = new THREE.MeshStandardMaterial({ color: 0x00cc66, roughness: 0.5 });
+            
+            for (let i = 0; i < 15; i++) {
+                const height = 18 + Math.random() * 10;
+                const stalkGeo = new THREE.CylinderGeometry(0.25, 0.35, height, 8);
+                const stalk = new THREE.Mesh(stalkGeo, stalkMat);
+                stalk.position.set((Math.random() - 0.5) * 12, height / 2, (Math.random() - 0.5) * 12);
+                stalk.castShadow = true;
+                bambooGroup.add(stalk);
+            }
+            bambooGroup.position.set(x, 0, z);
+            scene.add(bambooGroup);
+        }
+
+        // Real-World Landmark Generator 3: Taj Mahal Marble Arc Gateways
+        function createTajArcGateway(x, z, rot) {
+            const arcGroup = new THREE.Group();
+            const marbleMat = new THREE.MeshStandardMaterial({ color: 0xddeeff, roughness: 0.4, metalness: 0.1 });
+            
+            // Side Pillars
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(3, 20, 3), marbleMat); p1.position.set(-10, 10, 0);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(3, 20, 3), marbleMat); p2.position.set(10, 10, 0);
+            // Top Arch Span
+            const topArch = new THREE.Mesh(new THREE.BoxGeometry(23, 4, 3.5), marbleMat); topArch.position.set(0, 18, 0);
+            
+            // Lotus Spire Dome on Top
+            const dome = new THREE.Mesh(new THREE.SphereGeometry(3.5, 12, 12), marbleMat); dome.position.set(0, 23, 0);
+
+            arcGroup.add(p1, p2, topArch, dome);
+            arcGroup.position.set(x, 0, z);
+            arcGroup.rotation.y = rot;
+            scene.add(arcGroup);
+
+            const colMesh = new THREE.Mesh(new THREE.BoxGeometry(24, 20, 4), new THREE.MeshBasicMaterial({ visible: false }));
+            colMesh.position.set(x, 10, z);
+            colMesh.rotation.y = rot;
+            scene.add(colMesh);
+            collidableObjects.push(colMesh);
+        }
+
+        class DimLightSanctum {
+            constructor(x, z) {
+                this.position = new THREE.Vector3(x, 0, z);
+                this.radius = 14;
+
+                this.group = new THREE.Group();
+                // Sanctum Soft Blue/Cyan Dim Lantern Pillar
+                const base = new THREE.Mesh(
+                    new THREE.CylinderGeometry(2, 3, 2, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x111e2e, roughness: 0.8 })
+                );
+                base.position.y = 1;
+
+                const pillar = new THREE.Mesh(
+                    new THREE.CylinderGeometry(1, 1.2, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x112233, roughness: 0.6 })
+                );
+                pillar.position.y = 6;
+
+                // Dim Glowing Lotus Gem
+                const gem = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(1.2, 0),
+                    new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x00ffcc, emissiveIntensity: 0.6 })
+                );
+                gem.position.y = 11;
+
+                // Soft Dim Light Field (Subtle ambient illumination)
+                const dimLight = new THREE.PointLight(0x00ffcc, 1.5, 30);
+                dimLight.position.y = 11;
+
+                // Boundary Ring
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(this.radius, 0.15, 8, 32),
+                    new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.4 })
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = 0.2;
+
+                this.group.add(base, pillar, gem, dimLight, ring);
+                this.group.position.set(x, 0, z);
+                scene.add(this.group);
+            }
+
+            checkInside(playerPos) {
+                return playerPos.distanceTo(this.position) < this.radius;
+            }
+        }
 
         function createAmbientParticles() {
             const partGeo = new THREE.BufferGeometry();
-            const partCount = 2000;
-            const posArray = new Float32Array(partCount * 3);
-            for(let i = 0; i < partCount * 3; i++) {
-                posArray[i] = (Math.random() - 0.5) * 500; // Wide cinematic spread
+            const count = 1800;
+            const posArray = new Float32Array(count * 3);
+            for(let i = 0; i < count * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 600;
             }
             partGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
             const partMat = new THREE.PointsMaterial({
-                size: 0.6, color: varGoldColorHex(), transparent: true, opacity: 0.5,
-                blending: THREE.AdditiveBlending, depthWrite: false
+                size: 0.5, color: 0x00ffcc, transparent: true, opacity: 0.5,
+                blending: THREE.AdditiveBlending
             });
             particles = new THREE.Points(partGeo, partMat);
             scene.add(particles);
         }
         createAmbientParticles();
 
-        // Player Controls (Desktop PointerLock)
         const controls = new THREE.PointerLockControls(camera, document.body);
         scene.add(controls.getObject());
         controls.getObject().position.set(0, 4, 0);
 
-        // Physics & Movement Variables
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
         const moveState = { forward: false, backward: false, left: false, right: false };
-        const speed = 150.0;
+        const speed = 160.0;
         
-        // Mobile variables
         let isMobile = window.innerWidth <= 768;
-        let touchMoveX = 0; let touchMoveY = 0;
-        
-        // Game Objects Arrays
-        const collidableObjects = [];
-        const enemies = [];
-        const artifacts = [];
-        const projectiles = [];
-
-        // We synthesize audio procedurally to avoid external URLs and give a unique vibe
-        let synthBGM, synthAction, noiseSynth;
-        
-        function initAudio() {
-            Tone.start();
-            
-            // Mystical Drone BGM (Ancient Indian / Japanese fusion vibe)
-            synthBGM = new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 0.5,
-                modulationIndex: 1.2,
-                oscillator: { type: "sine" },
-                modulation: { type: "triangle" },
-                envelope: { attack: 2, decay: 2, sustain: 0.8, release: 2 }
-            }).toDestination();
-            synthBGM.volume.value = -15;
-
-            // Arpeggio pattern for mysterious exploration
-            const pattern = new Tone.Pattern(function(time, note){
-                synthBGM.triggerAttackRelease(note, "4n", time);
-            }, ["C3", "Eb3", "G3", "Bb3", "D4", "F4", "Eb4", "G3"], "randomWalk");
-            pattern.interval = "8n";
-            
-            // Start BGM loop
-            Tone.Transport.start();
-            pattern.start(0);
-
-            // SFX Synths
-            synthAction = new Tone.MembraneSynth().toDestination();
-            synthAction.volume.value = -5;
-            
-            noiseSynth = new Tone.NoiseSynth({
-                noise: { type: "white" },
-                envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
-            }).toDestination();
-            noiseSynth.volume.value = -10;
-        }
-
-        function playShootSound() {
-            if(synthAction) synthAction.triggerAttackRelease("C2", "8n");
-        }
-        function playHitSound() {
-            if(noiseSynth) noiseSynth.triggerAttackRelease("16n");
-        }
-        function playCollectSound() {
-            if(synthBGM) synthBGM.triggerAttackRelease(["C5", "E5", "G5"], "4n");
-        }
-        
-        
-        // Ground
-        const floorGeo = new THREE.PlaneGeometry(2000, 2000, 64, 64);
-        // Perturb vertices for uneven terrain
-        const pos = floorGeo.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-            pos.setZ(i, Math.sin(pos.getX(i)*0.1) * Math.cos(pos.getY(i)*0.1) * 2);
-        }
-        floorGeo.computeVertexNormals();
-        
-        const floorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x111620, 
-            roughness: 0.8, 
-            metalness: 0.2,
-            flatShading: true 
-        });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // Architecture Generators
-        function createToriiGate(x, z, rotation) {
-            const group = new THREE.Group();
-            const redMat = new THREE.MeshStandardMaterial({ color: 0xaa1111, roughness: 0.6 });
-            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-            
-            // Pillars
-            const pillarGeo = new THREE.CylinderGeometry(1, 1, 15, 8);
-            const p1 = new THREE.Mesh(pillarGeo, redMat); p1.position.set(-6, 7.5, 0); p1.castShadow = true;
-            const p2 = new THREE.Mesh(pillarGeo, redMat); p2.position.set(6, 7.5, 0); p2.castShadow = true;
-            
-            // Beams
-            const beam1Geo = new THREE.BoxGeometry(16, 1.5, 1.5);
-            const b1 = new THREE.Mesh(beam1Geo, redMat); b1.position.set(0, 13, 0); b1.castShadow = true;
-            
-            const beam2Geo = new THREE.BoxGeometry(18, 2, 2);
-            const b2 = new THREE.Mesh(beam2Geo, blackMat); b2.position.set(0, 15, 0);
-            // Curve the top beam slightly
-            b2.geometry.translate(0,-1,0);
-            const pos = b2.geometry.attributes.position;
-            for(let i=0; i<pos.count; i++) {
-                let px = pos.getX(i);
-                pos.setY(i, pos.getY(i) + (px*px)*0.005);
-            }
-            b2.geometry.computeVertexNormals();
-            b2.castShadow = true;
-            
-            group.add(p1, p2, b1, b2);
-            group.position.set(x, 0, z);
-            group.rotation.y = rotation;
-            
-            scene.add(group);
-            
-            // Add collision bounds (invisible box)
-            const colGeo = new THREE.BoxGeometry(14, 15, 2);
-            const colMesh = new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({visible:false}));
-            colMesh.position.set(x, 7.5, z);
-            colMesh.rotation.y = rotation;
-            scene.add(colMesh);
-            collidableObjects.push(colMesh);
-        }
-
-        function createAncientPillar(x, z) {
-            const mat = new THREE.MeshStandardMaterial({ color: 0x444433, roughness: 0.9, metalness: 0.1 });
-            // Indian-style ornate pillar base
-            const baseGeo = new THREE.BoxGeometry(3, 2, 3);
-            const base = new THREE.Mesh(baseGeo, mat); base.position.y = 1;
-            
-            const shaftGeo = new THREE.CylinderGeometry(1, 1.2, 10, 8);
-            const shaft = new THREE.Mesh(shaftGeo, mat); shaft.position.y = 7;
-            
-            const topGeo = new THREE.BoxGeometry(3.5, 1.5, 3.5);
-            const top = new THREE.Mesh(topGeo, mat); top.position.y = 12.75;
-            
-            const group = new THREE.Group();
-            group.add(base, shaft, top);
-            group.position.set(x, 0, z);
-            
-            // Adding a glowing rune/gem on some pillars
-            if(Math.random() > 0.5) {
-                const gemGeo = new THREE.OctahedronGeometry(0.5);
-                const gemMat = new THREE.MeshBasicMaterial({ color: varPrimaryColorHex() });
-                const gem = new THREE.Mesh(gemGeo, gemMat);
-                gem.position.set(0, 14, 0);
-                group.add(gem);
-            }
-            
-            scene.add(group);
-            
-            const colGeo = new THREE.BoxGeometry(3.5, 15, 3.5);
-            const colMesh = new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({visible:false}));
-            colMesh.position.set(x, 7.5, z);
-            scene.add(colMesh);
-            collidableObjects.push(colMesh);
-        }
-        
-        function varPrimaryColorHex() { return 0x00ffcc; }
-        function varAccentColorHex() { return 0xff0055; }
-        function varGoldColorHex() { return 0xffd700; }
-
-        function createArtifact(x, z) {
-            const geo = new THREE.IcosahedronGeometry(1.5, 0);
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: varPrimaryColorHex(), emissive: varPrimaryColorHex(), emissiveIntensity: 0.8, wireframe: true 
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, 4, z);
-            
-            // Add point light for glow
-            const light = new THREE.PointLight(varPrimaryColorHex(), 2, 20);
-            mesh.add(light);
-            
-            scene.add(mesh);
-            artifacts.push(mesh);
-        }
+        let touchMoveX = 0, touchMoveY = 0;
 
         class HumanoidEnemy {
             constructor(x, z, healthMultiplier) {
                 this.group = new THREE.Group();
-                this.health = 50 * healthMultiplier;
+                this.health = 45 * healthMultiplier;
                 this.maxHealth = this.health;
-                this.speed = 10 + (Math.random() * 10);
-                this.state = 'patrol'; // patrol, chase, attack
+                this.speed = 12 + Math.random() * 8;
                 
-                // Emissive glowing material (ghostly minion of Asura)
                 const mat = new THREE.MeshStandardMaterial({ 
-                    color: varAccentColorHex(), emissive: varAccentColorHex(), 
-                    emissiveIntensity: 0.4, transparent: true, opacity: 0.8 
+                    color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 0.5, 
+                    transparent: true, opacity: 0.85 
                 });
                 
-                // Head
-                this.head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), mat);
-                this.head.position.y = 5.5;
-                // Torso (Angular, aggressive)
-                this.torso = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.6, 3, 4), mat);
-                this.torso.position.y = 3.5;
-                // Floating limbs
-                this.armL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2, 0.5), mat);
-                this.armL.position.set(-1.8, 4, 0);
-                this.armR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2, 0.5), mat);
-                this.armR.position.set(1.8, 4, 0);
+                this.head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 12), mat);
+                this.head.position.y = 5.2;
+                this.torso = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.5, 2.8, 4), mat);
+                this.torso.position.y = 3.3;
                 
-                this.group.add(this.head, this.torso, this.armL, this.armR);
-                this.group.position.set(x, 1, z);
+                this.group.add(this.head, this.torso);
+                this.group.position.set(x, 0, z);
                 scene.add(this.group);
                 
-                // Target Waypoint for random movement
-                this.targetPoint = new THREE.Vector3(x + (Math.random()*40-20), 1, z + (Math.random()*40-20));
-                
-                // Collision Box
                 this.boundingBox = new THREE.Box3();
             }
 
             update(delta, playerPos) {
-                // Hover animation
-                const time = Date.now() * 0.003;
-                this.head.position.y = 5.5 + Math.sin(time) * 0.2;
-                this.armL.rotation.x = Math.sin(time * 1.5) * 0.5;
-                this.armR.rotation.x = -Math.sin(time * 1.5) * 0.5;
-
                 const distToPlayer = this.group.position.distanceTo(playerPos);
                 
-                // Adaptive AI speeds
-                let adaptedSpeed = this.speed;
-                if (aiModel.playstyle === 'evasive') adaptedSpeed *= 1.35; 
+                // Attack Player if within reach
+                if (distToPlayer < 40) {
+                    const dir = new THREE.Vector3().subVectors(playerPos, this.group.position).normalize();
+                    this.group.position.addScaledVector(dir, this.speed * delta);
+                    this.group.rotation.y = Math.atan2(dir.x, dir.z);
 
-                // State Machine
-                if (distToPlayer < 45) {
-                    this.state = 'chase';
-                } else {
-                    this.state = 'patrol';
-                }
-
-                if (this.state === 'chase') {
-                    // Smart erratic dodging based on player aggression analysis
-                    if (aiModel.playstyle === 'aggressive') {
-                        const dodgeX = Math.sin(time * 6 + this.group.position.x) * 6;
-                        const dodgeZ = Math.cos(time * 6 + this.group.position.z) * 6;
-                        this.targetPoint.copy(playerPos).add(new THREE.Vector3(dodgeX, 0, dodgeZ));
-                    } else {
-                        this.targetPoint.copy(playerPos);
-                    }
-
-                    // Attack logic
-                    if (distToPlayer < 5) {
-                        playerTakeDamage(10 * delta); 
-                        aiModel.hits++; // Feed NLP agent seamlessly
-                    }
-                } else if (this.state === 'patrol') {
-                    // Random movement - change target if close
-                    if (this.group.position.distanceTo(this.targetPoint) < 2) {
-                        this.targetPoint.set(
-                            this.group.position.x + (Math.random()*60-30),
-                            1,
-                            this.group.position.z + (Math.random()*60-30)
-                        );
+                    if (distToPlayer < 4.5) {
+                        playerTakeDamage(12 * delta);
                     }
                 }
-
-                // Move towards target
-                const dir = new THREE.Vector3().subVectors(this.targetPoint, this.group.position).normalize();
-                this.group.position.addScaledVector(dir, adaptedSpeed * delta);
-                
-                // Look at target (smooth rotation)
-                const targetRotation = Math.atan2(dir.x, dir.z);
-                this.group.rotation.y = targetRotation;
-
                 this.boundingBox.setFromObject(this.group);
             }
 
             takeDamage(amount) {
                 this.health -= amount;
-                // Flash white
-                this.head.material.emissiveIntensity = 1.0;
-                setTimeout(() => {
-                    if(this.head) this.head.material.emissiveIntensity = 0.4;
-                }, 100);
-
                 if (this.health <= 0) {
                     scene.remove(this.group);
-                    return true; // Is dead
+                    return true;
                 }
                 return false;
             }
@@ -551,46 +679,27 @@
             constructor(x, z, index, colorId) {
                 this.index = index;
                 this.colorId = colorId; 
-                this.colors = [varPrimaryColorHex(), varAccentColorHex(), varGoldColorHex()];
+                this.colors = [0x00ffcc, 0xff0055, 0xffd700];
                 this.active = true;
                 
                 this.group = new THREE.Group();
-                
-                const geo = new THREE.OctahedronGeometry(1.8, 0);
                 this.mat = new THREE.MeshStandardMaterial({ 
                     color: this.colors[colorId], emissive: this.colors[colorId], 
-                    emissiveIntensity: 0.6, wireframe: true 
+                    emissiveIntensity: 0.7, wireframe: true 
                 });
-                this.mesh = new THREE.Mesh(geo, this.mat);
-                this.mesh.position.y = 6;
+                this.mesh = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), this.mat);
+                this.mesh.position.y = 5.5;
                 
-                // Magical binding ring
-                const ringGeo = new THREE.TorusGeometry(2.5, 0.1, 4, 16);
-                this.ringMat = new THREE.MeshBasicMaterial({ color: this.colors[colorId], transparent: true, opacity: 0.4 });
-                this.ring = new THREE.Mesh(ringGeo, this.ringMat);
-                this.ring.rotation.x = Math.PI / 2;
-                this.ring.position.y = 6;
-                
-                // Pedestal base
-                const pedGeo = new THREE.CylinderGeometry(0.8, 1.5, 4, 6);
-                const pedMat = new THREE.MeshStandardMaterial({ color: 0x222225, roughness: 0.9, metalness: 0.5 });
-                const pedestal = new THREE.Mesh(pedGeo, pedMat);
-                pedestal.position.y = 2;
-                
-                this.group.add(this.mesh, this.ring, pedestal);
+                this.group.add(this.mesh);
                 this.group.position.set(x, 0, z);
                 scene.add(this.group);
-                
                 this.boundingBox = new THREE.Box3();
             }
             
             update(delta) {
                 if(!this.active) return;
-                this.mesh.rotation.y += 1.5 * delta;
-                this.mesh.rotation.z += 0.5 * delta;
-                this.ring.rotation.z -= 1.0 * delta;
-                this.mesh.position.y = 6 + Math.sin(Date.now()*0.003 + this.index) * 0.8;
-                this.ring.position.y = this.mesh.position.y;
+                this.mesh.rotation.y += 1.8 * delta;
+                this.mesh.position.y = 5.5 + Math.sin(Date.now()*0.003 + this.index) * 0.6;
                 this.boundingBox.setFromObject(this.mesh);
             }
             
@@ -600,125 +709,111 @@
                 this.mat.emissiveIntensity = 0.1;
                 this.mat.wireframe = false;
                 this.mat.color.setHex(0x333333);
-                this.ring.visible = false;
-                playCollectSound();
                 return true;
             }
         }
 
         function generateWorld(chap) {
-            // Clear old level
-            collidableObjects.forEach(obj => scene.remove(obj));
-            collidableObjects.length = 0;
-            artifacts.forEach(obj => scene.remove(obj));
-            artifacts.length = 0;
-            enemies.forEach(e => scene.remove(e.group));
-            enemies.length = 0;
-            runes.forEach(r => scene.remove(r.group));
-            runes.length = 0;
-            
-            if (aiModel.shots > 20 && aiModel.hits < 5) aiModel.playstyle = 'aggressive';
-            else if (aiModel.hits >= 15) aiModel.playstyle = 'evasive';
-            else aiModel.playstyle = 'neutral';
-            
-            aiModel.shots = 0; aiModel.hits = 0; // Seamless reset
-            
-            // Generate Sequence Puzzle
-            aiModel.sequenceLength = Math.min(3 + Math.floor(chap/2), 7);
+            collidableObjects.forEach(obj => scene.remove(obj)); collidableObjects.length = 0;
+            enemies.forEach(e => scene.remove(e.group)); enemies.length = 0;
+            runes.forEach(r => scene.remove(r.group)); runes.length = 0;
+            sanctums.forEach(s => scene.remove(s.group)); sanctums.length = 0;
+            artifacts.forEach(a => scene.remove(a)); artifacts.length = 0;
+
+            // Generate Real-World Landmarks
+            createVaranasiGhats(60, -80);
+            createKyotoBambooCluster(-70, -60);
+            createTajArcGateway(0, -120, 0);
+
+            // Generate Dim Light Safe Sanctums
+            sanctums.push(new DimLightSanctum(0, 0));
+            sanctums.push(new DimLightSanctum(100, 80));
+            sanctums.push(new DimLightSanctum(-90, 90));
+
+            // Generate Puzzle Sequence Runes
+            aiModel.sequenceLength = Math.min(3 + Math.floor(chap/2), 6);
             aiModel.expectedSequence = [];
             aiModel.currentSequenceIndex = 0;
             
             for(let i=0; i<aiModel.sequenceLength; i++) {
-                // Ensure runes are reasonably close to center for puzzle solving
-                const rX = (Math.random() - 0.5) * 80;
-                const rZ = (Math.random() - 0.5) * 80;
+                const rX = (Math.random() - 0.5) * 120;
+                const rZ = (Math.random() - 0.5) * 120;
                 const cId = Math.floor(Math.random() * 3);
                 runes.push(new SequenceRune(rX, rZ, i, cId));
                 aiModel.expectedSequence.push(cId);
             }
             updatePuzzleUI();
 
-            // Expand world bounds per chapter
-            worldBounds = 200 + (chap * 100); 
-            artifactsRequired = 1; // Only 1 artifact drops after puzzle
-            artifactsCollected = 0;
-            updateHUD();
-
-            const density = 0.002;
-            const area = worldBounds * worldBounds * 4;
-            const objCount = Math.floor(area * density);
-
-            for(let i=0; i<objCount; i++) {
-                const x = (Math.random() - 0.5) * worldBounds * 2;
-                const z = (Math.random() - 0.5) * worldBounds * 2;
-                
-                // Keep center clear for spawning
-                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
-
-                if (Math.random() > 0.7) {
-                    createToriiGate(x, z, Math.random() * Math.PI);
-                } else {
-                    createAncientPillar(x, z);
-                }
-            }
-
-            // Spawn Artifacts at random locations - REMOVED (Artifacts now locked behind Puzzle)
-
-            // Spawn Enemies (number scales with chapter and AI evaluation)
-            const baseMultiplier = aiModel.playstyle === 'evasive' ? 4 : 3;
-            const enemyCount = 5 + (chap * baseMultiplier);
+            // Spawn Enemies
+            const enemyCount = 6 + (chap * 3);
             for(let i=0; i<enemyCount; i++) {
-                const x = (Math.random() - 0.5) * worldBounds;
-                const z = (Math.random() - 0.5) * worldBounds;
-                if(Math.abs(x) > 30 || Math.abs(z) > 30) {
+                const x = (Math.random() - 0.5) * 220;
+                const z = (Math.random() - 0.5) * 220;
+                if(Math.abs(x) > 25 || Math.abs(z) > 25) {
                     enemies.push(new HumanoidEnemy(x, z, chap * 0.5 + 0.5));
                 }
             }
-
-            // Update UI Colors to show progression
-            scene.fog.color.setHSL((chap * 0.1) % 1.0, 0.6, 0.05);
-            scene.background.copy(scene.fog.color);
+            updateHUD();
         }
 
-        function fireWeapon() {
-            if (!isGameRunning) return;
-            playShootSound();
-            aiModel.shots++; // Invisible NLP Training metric
+        function triggerAttack() {
+            if (!isGameRunning || attackCooldown) return;
+            attackCooldown = true;
+            playWeaponSound(currentWeaponIndex === 0 ? 'katana' : currentWeaponIndex === 1 ? 'bow' : 'orb');
 
-            const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
-            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-            
-            // Start at camera pos
-            bullet.position.copy(controls.getObject().position);
-            
-            // Get camera direction
-            const dir = new THREE.Vector3();
-            camera.getWorldDirection(dir);
-            
-            projectiles.push({
-                mesh: bullet,
-                dir: dir,
-                life: 2.0 // Seconds to live
-            });
-            scene.add(bullet);
+            // Katana Melee Slash Arc Effect
+            if (currentWeaponIndex === 0) {
+                crosshair.classList.add('slashing');
+                setTimeout(() => crosshair.classList.remove('slashing'), 200);
+
+                // Check Melee Range
+                const pPos = controls.getObject().position;
+                const cameraDir = new THREE.Vector3();
+                camera.getWorldDirection(cameraDir);
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (pPos.distanceTo(enemies[j].group.position) < 8) {
+                        const isDead = enemies[j].takeDamage(45 * playerPower);
+                        if (isDead) enemies.splice(j, 1);
+                    }
+                }
+                for (let j = 0; j < runes.length; j++) {
+                    if (runes[j].active && pPos.distanceTo(runes[j].group.position) < 10) {
+                        if(runes[j].hit()) handleRuneHit(j);
+                    }
+                }
+                setTimeout(() => { attackCooldown = false; }, 300);
+            } 
+            // Ranged Bow / Orb Projectiles
+            else {
+                const projGeo = currentWeaponIndex === 1 ? new THREE.SphereGeometry(0.25, 8, 8) : new THREE.IcosahedronGeometry(0.4, 0);
+                const projMat = new THREE.MeshBasicMaterial({ color: currentWeaponIndex === 1 ? 0x3a86ff : 0xff0055 });
+                const proj = new THREE.Mesh(projGeo, projMat);
+                proj.position.copy(controls.getObject().position);
+                
+                const dir = new THREE.Vector3();
+                camera.getWorldDirection(dir);
+                projectiles.push({ mesh: proj, dir: dir, life: 2.2, type: currentWeaponIndex });
+                scene.add(proj);
+
+                setTimeout(() => { attackCooldown = false; }, currentWeaponIndex === 1 ? 350 : 600);
+            }
         }
 
         function checkShootingHits(delta) {
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
-                p.mesh.position.addScaledVector(p.dir, 300 * delta); // Bullet speed
+                p.mesh.position.addScaledVector(p.dir, 260 * delta);
                 p.life -= delta;
 
                 let hit = false;
                 const pBox = new THREE.Box3().setFromObject(p.mesh);
 
-                // Check enemies
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     if (pBox.intersectsBox(enemies[j].boundingBox)) {
                         hit = true;
-                        playHitSound();
-                        const isDead = enemies[j].takeDamage(25 * playerPower);
+                        const dmg = p.type === 1 ? 30 : 60;
+                        const isDead = enemies[j].takeDamage(dmg * playerPower);
                         if (isDead) enemies.splice(j, 1);
                         break;
                     }
@@ -734,41 +829,9 @@
                     }
                 }
 
-                // Check walls (simple distance check for performance)
-                if(!hit) {
-                    for(let col of collidableObjects) {
-                        if(p.mesh.position.distanceTo(col.position) < 8) {
-                            hit = true; break;
-                        }
-                    }
-                }
-
                 if (hit || p.life <= 0) {
                     scene.remove(p.mesh);
                     projectiles.splice(i, 1);
-                }
-            }
-        }
-
-        function checkArtifactCollection() {
-            const playerPos = controls.getObject().position;
-            for(let i = artifacts.length - 1; i >= 0; i--) {
-                const art = artifacts[i];
-                // Rotate animation
-                art.rotation.y += 0.02;
-                art.rotation.x += 0.01;
-
-                if (playerPos.distanceTo(art.position) < 5) {
-                    scene.remove(art);
-                    artifacts.splice(i, 1);
-                    artifactsCollected++;
-                    playerPower += 0.2; // Gain power
-                    playCollectSound();
-                    updateHUD();
-
-                    if (artifactsCollected >= artifactsRequired) {
-                        advanceChapter();
-                    }
                 }
             }
         }
@@ -778,39 +841,33 @@
             const expectedColor = aiModel.expectedSequence[aiModel.currentSequenceIndex];
             
             if(hitColor === expectedColor) {
-                // Correct Move
                 aiModel.currentSequenceIndex++;
                 updatePuzzleUI();
                 
                 if(aiModel.currentSequenceIndex >= aiModel.sequenceLength) {
                     puzzleStatus.innerText = "SEQUENCE ACCEPTED. ARTIFACT REVEALED.";
                     puzzleStatus.style.color = "#00ffcc";
-                    // Deploy main artifact safely in front of player
+                    
                     const dir = new THREE.Vector3();
                     camera.getWorldDirection(dir);
-                    const spawnPos = controls.getObject().position.clone().addScaledVector(dir, 15);
-                    createArtifact(spawnPos.x, spawnPos.z);
+                    const spawnPos = controls.getObject().position.clone().addScaledVector(dir, 12);
+                    
+                    const art = new THREE.Mesh(
+                        new THREE.IcosahedronGeometry(1.5, 0),
+                        new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x00ffcc, wireframe: true })
+                    );
+                    art.position.set(spawnPos.x, 4, spawnPos.z);
+                    scene.add(art);
+                    artifacts.push(art);
                 }
             } else {
-                // Tactical Failure - AI spawns punishment Elite
-                puzzleStatus.innerText = "SEQUENCE FAILED. ASURA AWAKENED.";
+                puzzleStatus.innerText = "SEQUENCE FAILED. ASURA AGGRESSION RISES.";
                 puzzleStatus.style.color = "#ff0055";
-                
-                const p = controls.getObject().position;
-                enemies.push(new HumanoidEnemy(p.x + 15, p.z - 15, chapter * 2.5)); // Elite Punishment
-                
-                // Reset logic
                 setTimeout(() => {
                     aiModel.currentSequenceIndex = 0;
-                    runes.forEach(r => { 
-                        r.active = true; 
-                        r.mat.emissiveIntensity = 0.6; 
-                        r.mat.wireframe = true;
-                        r.mat.color.setHex(r.colors[r.colorId]);
-                        r.ring.visible = true;
-                    });
+                    runes.forEach(r => { r.active = true; r.mat.wireframe = true; });
                     updatePuzzleUI();
-                }, 2500);
+                }, 2000);
             }
         }
 
@@ -818,7 +875,7 @@
             puzzleStatus.style.display = 'block';
             puzzleStatus.style.color = '#ffd700';
             const colorNames = ['CYAN', 'RED', 'GOLD'];
-            let seqText = "Sequence: [ ";
+            let seqText = "Resonance Sequence: [ ";
             for(let i=0; i<aiModel.sequenceLength; i++) {
                 if(i < aiModel.currentSequenceIndex) seqText += "OK ";
                 else seqText += colorNames[aiModel.expectedSequence[i]] + " ";
@@ -827,30 +884,50 @@
             puzzleStatus.innerText = seqText;
         }
 
-        function advanceChapter() {
-            chapter++;
-            showModal(`Cycle Completed`, `The Asura's simulation adapts. You have entered Chapter ${chapter}. The world expands. Enemies grow stronger.`);
-            controls.getObject().position.set(0, 4, 0); // Reset position silently
-            generateWorld(chapter);
+        function checkSanctuaryZone(playerPos) {
+            let insideAny = false;
+            for (let s of sanctums) {
+                if (s.checkInside(playerPos)) {
+                    insideAny = true;
+                    break;
+                }
+            }
+
+            if (insideAny && !inSanctuary) {
+                inSanctuary = true;
+                sanctuaryBanner.style.display = 'block';
+                playSanctuaryChime();
+            } else if (!insideAny && inSanctuary) {
+                inSanctuary = false;
+                sanctuaryBanner.style.display = 'none';
+            }
+
+            if (inSanctuary) {
+                // Recover Vitality in Dim Light Sanctuary & Auto-Save State
+                playerHealth = Math.min(100, playerHealth + 15 * 0.016);
+                sanctuaryEnergy = Math.min(100, sanctuaryEnergy + 20 * 0.016);
+                updateHUD();
+            }
         }
 
         function playerTakeDamage(amount) {
             playerHealth -= amount;
             damageOverlay.style.opacity = 1;
             setTimeout(() => { damageOverlay.style.opacity = 0; }, 100);
-            
+            updateHUD();
+
             if(playerHealth <= 0) {
-                showModal("Samsara Reset", "Your physical form collapsed. The cycle begins anew, but you retain your knowledge.");
+                showModal("Samsara Reseeded", "Your physical vessel dissolved. Retreat into the Dim Light Sanctums next time to ensure survival.");
                 playerHealth = 100;
-                // Soft reset (infinite loop logic)
                 controls.getObject().position.set(0, 4, 0);
             }
         }
 
         function updateHUD() {
-            uiChapter.innerText = `${chapter} : Iteration`;
+            uiChapter.innerText = `${chapter} : Realm`;
             uiArtifacts.innerText = `${artifactsCollected} / ${artifactsRequired}`;
-            uiPower.innerText = `${playerPower.toFixed(1)}x`;
+            hpFill.style.width = `${Math.max(0, playerHealth)}%`;
+            sanctuaryFill.style.width = `${Math.max(0, sanctuaryEnergy)}%`;
         }
 
         document.addEventListener('keydown', (e) => {
@@ -860,6 +937,9 @@
                 case 'KeyA': moveState.left = true; break;
                 case 'KeyS': moveState.backward = true; break;
                 case 'KeyD': moveState.right = true; break;
+                case 'Digit1': selectWeapon(0); break;
+                case 'Digit2': selectWeapon(1); break;
+                case 'Digit3': selectWeapon(2); break;
             }
         });
         document.addEventListener('keyup', (e) => {
@@ -874,11 +954,11 @@
         document.addEventListener('mousedown', (e) => {
             if (e.target.tagName !== 'BUTTON' && isGameRunning && !isMobile) {
                 if(!controls.isLocked) controls.lock();
-                else if (e.button === 0) fireWeapon();
+                else if (e.button === 0) triggerAttack();
             }
         });
-        
-        // Mobile Touch Implementation
+
+        // Mobile Controls
         const joyBase = document.getElementById('joystickMove');
         const joyStick = document.getElementById('stickMove');
         const actionBtn = document.getElementById('mobileAction');
@@ -889,84 +969,46 @@
             const rect = joyBase.getBoundingClientRect();
             joyCenterX = rect.left + rect.width / 2;
             joyCenterY = rect.top + rect.height / 2;
-            handleJoystick(e.touches[0]);
         });
         joyBase.addEventListener('touchmove', (e) => {
-            if(isDraggingJoy) handleJoystick(e.touches[0]);
+            if(isDraggingJoy) {
+                let dx = e.touches[0].clientX - joyCenterX;
+                let dy = e.touches[0].clientY - joyCenterY;
+                const maxDist = 35;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist > maxDist) { dx = (dx/dist) * maxDist; dy = (dy/dist) * maxDist; }
+                joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
+                touchMoveX = dx / maxDist; touchMoveY = dy / maxDist;
+            }
         });
         joyBase.addEventListener('touchend', () => {
-            isDraggingJoy = false;
-            joyStick.style.transform = `translate(0px, 0px)`;
+            isDraggingJoy = false; joyStick.style.transform = `translate(0px, 0px)`;
             touchMoveX = 0; touchMoveY = 0;
         });
 
-        function handleJoystick(touch) {
-            let dx = touch.clientX - joyCenterX;
-            let dy = touch.clientY - joyCenterY;
-            const maxDist = 35;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if(dist > maxDist) {
-                dx = (dx/dist) * maxDist;
-                dy = (dy/dist) * maxDist;
-            }
-            joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-            // Normalize for movement logic
-            touchMoveX = dx / maxDist; 
-            touchMoveY = dy / maxDist;
-        }
-        
-        // Right side screen touch for looking (Mobile)
-        let lastTouchX = 0, lastTouchY = 0;
-        document.addEventListener('touchstart', (e) => {
-            if(isMobile && e.touches[0].clientX > window.innerWidth/2 && e.target !== actionBtn) {
-                lastTouchX = e.touches[0].clientX;
-                lastTouchY = e.touches[0].clientY;
-            }
-        });
-        document.addEventListener('touchmove', (e) => {
-            if(isMobile && e.touches[0].clientX > window.innerWidth/2 && isGameRunning) {
-                const dx = e.touches[0].clientX - lastTouchX;
-                const dy = e.touches[0].clientY - lastTouchY;
-                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-                euler.setFromQuaternion(camera.quaternion);
-                euler.y -= dx * 0.005;
-                euler.x -= dy * 0.005;
-                euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-                camera.quaternion.setFromEuler(euler);
-                lastTouchX = e.touches[0].clientX;
-                lastTouchY = e.touches[0].clientY;
-            }
-        });
+        actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack(); });
 
-        actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); fireWeapon(); });
-
-        function showModal(title, text, buttonText = "Continue") {
+        function showModal(title, text) {
             isGameRunning = false;
             if(controls.isLocked) controls.unlock();
             document.getElementById('modalTitle').innerText = title;
             document.getElementById('modalText').innerHTML = text;
-            document.getElementById('startBtn').innerText = buttonText;
             document.getElementById('modalOverlay').style.display = 'flex';
         }
 
         document.getElementById('startBtn').addEventListener('click', () => {
             document.getElementById('modalOverlay').style.display = 'none';
-            if(!synthBGM) initAudio(); // Start audio context on first user interaction
+            if(!synthBGM) initAudio();
             isGameRunning = true;
             if(!isMobile) controls.lock();
         });
 
         document.getElementById('hintBtn').addEventListener('click', () => {
-            let nlpAnalysis = `Agent Profiling: Protocol [${aiModel.playstyle.toUpperCase()}]. `;
-            if (aiModel.playstyle === 'aggressive') nlpAnalysis += `You utilize excess force. The simulation is responding with unpredictable dodging mechanics. `;
-            else if (aiModel.playstyle === 'evasive') nlpAnalysis += `High damage taken. The simulation is increasing hostile entity density to overwhelm you. `;
-            else nlpAnalysis += `Standard baseline detected. `;
-
-            showModal("AI Agent Insight", `${nlpAnalysis}<br><br>Strategy: To break the cycle, you must now decode the Resonance Sequence. Read the sequence at the top left and shoot the floating geometric runes (Cyan, Red, Gold) in that exact order to spawn the Chapter Artifact. Incorrect sequences will spawn elite executioners.`);
+            showModal("AI Agent Insight", "<b>Tactical Briefing:</b><br>1. Use the <b>Dim Light Sanctums</b> (glowing pillars) to regenerate health and save.<br>2. Swap weapons with <b>Keys 1, 2, 3</b> for Katana, Arc Bow, or Chakra Orb.<br>3. Read the sequence at the top left and strike the floating runes in exact order to summon the realm artifact!");
         });
 
         document.getElementById('storeBtn').addEventListener('click', () => {
-            showModal("Premium Vault (GBP/CHF/USD)", "Exclusive Cosmetic Upgrades coming in v2.0.<br><br>Current balance: 0. Acquire more artifacts to unlock trade capability.");
+            showModal("Premium Vault", "<b>Next-Gen Artifact Vault:</b><br>Future-ready trade & cosmetics store unlocked in Season 2.");
         });
 
         let prevTime = performance.now();
@@ -974,85 +1016,67 @@
         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
-            const delta = Math.min((time - prevTime) / 1000, 0.1); // Cap delta to prevent huge jumps
-            
-            if(particles) {
-                particles.rotation.y += 0.03 * delta;
-            }
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
             
             if (isGameRunning) {
-                // Movement Logic (Combines WASD and Touch Joystick)
+                // Movement
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
 
                 let dZ = Number(moveState.forward) - Number(moveState.backward) - touchMoveY;
                 let dX = Number(moveState.right) - Number(moveState.left) + touchMoveX;
                 
-                direction.z = dZ;
-                direction.x = dX;
-                direction.normalize(); 
+                direction.z = dZ; direction.x = dX; direction.normalize();
 
                 if (moveState.forward || moveState.backward || Math.abs(touchMoveY) > 0.1) velocity.z -= direction.z * speed * delta;
                 if (moveState.left || moveState.right || Math.abs(touchMoveX) > 0.1) velocity.x -= direction.x * speed * delta;
 
-                // Simple Collision Detection
-                const playerPos = controls.getObject().position.clone();
-                playerPos.x += velocity.x * delta * -1;
-                playerPos.z += velocity.z * delta * -1;
-                
-                let collision = false;
-                for(let col of collidableObjects) {
-                    if (playerPos.distanceTo(col.position) < 4) {
-                        collision = true; break;
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                controls.getObject().position.y = 4; // Eye height
+
+                const playerPos = controls.getObject().position;
+
+                // Weapon Sway
+                weaponGroup.position.x = Math.sin(time * 0.005) * 0.02;
+                weaponGroup.position.y = Math.cos(time * 0.005) * 0.02;
+
+                // Check Sanctum
+                checkSanctuaryZone(playerPos);
+
+                // Update Objects
+                for(let enemy of enemies) enemy.update(delta, playerPos);
+                for(let rune of runes) rune.update(delta);
+
+                checkShootingHits(delta);
+
+                // Check Artifact Collection
+                for(let i = artifacts.length - 1; i >= 0; i--) {
+                    if (playerPos.distanceTo(artifacts[i].position) < 5) {
+                        scene.remove(artifacts[i]);
+                        artifacts.splice(i, 1);
+                        artifactsCollected++;
+                        chapter++;
+                        showModal(`Realm Cleared`, `Resonance achieved! Entering Realm Iteration ${chapter}.`);
+                        generateWorld(chapter);
                     }
                 }
-                
-                if(!collision) {
-                    controls.moveRight(-velocity.x * delta);
-                    controls.moveForward(-velocity.z * delta);
-                }
-
-                // Keep y locked
-                controls.getObject().position.y = 4;
-
-                // Infinite Boundary Wrap
-                const p = controls.getObject().position;
-                if(Math.abs(p.x) > worldBounds*1.5 || Math.abs(p.z) > worldBounds*1.5) {
-                    p.x = 0; p.z = 0; // Wrap around to center
-                    playerTakeDamage(10); // Penalty for hitting the simulation wall
-                }
-
-                // Update Enemies
-                const curPos = controls.getObject().position;
-                for(let enemy of enemies) {
-                    enemy.update(delta, curPos);
-                }
-                
-                for(let rune of runes) {
-                    rune.update(delta);
-                }
-
-                // Update Systems
-                checkShootingHits(delta);
-                checkArtifactCollection();
             }
             
             prevTime = time;
             renderer.render(scene, camera);
         }
 
-        // Initialize First World
+        // Initialize First World and Start Animation Loop
         generateWorld(chapter);
         animate();
 
-        // Window Resize Handle
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             isMobile = window.innerWidth <= 768;
         });
-
     </script>
 </body>
 </html>
