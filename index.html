@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="The IAH: Samsara - A AAA Japanese-style first-person exploration game featuring ancient Indian mythology, real-world locations, and infinite strategy.">
+    <title>The IAH: Samsara</title>
+    <style>
+        :root {
+            --primary: #00ffcc;
+            --accent: #ff0055;
+            --gold: #ffd700;
+            --bg-overlay: rgba(0, 0, 0, 0.75);
+        }
+        
+        body, html { 
+            margin: 0; padding: 0; overflow: hidden; 
+            background-color: #050505; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #gameCanvas { 
+            display: block; width: 100vw; height: 100vh; 
+        }
+        
+        /* UI Elements */
+        #crosshair { 
+            position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; 
+            background: var(--primary); border-radius: 50%; 
+            transform: translate(-50%, -50%); pointer-events: none; 
+            box-shadow: 0 0 10px var(--primary);
+            z-index: 10;
+        }
+        
+        .ui-panel {
+            position: absolute; padding: 12px 24px; 
+            background: rgba(10, 10, 15, 0.85); 
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(4px);
+            color: #fff; border-radius: 8px; 
+            text-transform: uppercase; letter-spacing: 1.5px; 
+            font-size: 12px; font-weight: 600;
+            z-index: 20;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        #hud { top: 20px; left: 20px; border-left: 3px solid var(--primary); }
+        #hud span { color: var(--primary); font-size: 16px; font-weight: 800; display: block; margin-top: 5px;}
+        
+        #hintBtn { 
+            top: 20px; right: 20px; cursor: pointer; 
+            transition: all 0.3s ease; border-right: 3px solid var(--gold);
+        }
+        #hintBtn:hover { background: rgba(255, 215, 0, 0.2); }
+        
+        #storeBtn { 
+            top: 75px; right: 20px; cursor: pointer; 
+            transition: all 0.3s ease; border-right: 3px solid var(--accent);
+        }
+        #storeBtn:hover { background: rgba(255, 0, 85, 0.2); }
+
+        /* Custom Modal (Replaces alerts) */
+        #modalOverlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-overlay); backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100;
+        }
+        #modalBox {
+            background: #111; border: 1px solid #333; border-radius: 12px;
+            padding: 40px; text-align: center; color: white; max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            position: relative; overflow: hidden;
+        }
+        #modalBox::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+        #modalTitle { font-size: 24px; margin-bottom: 15px; color: var(--gold); font-weight: 800; letter-spacing: 2px;}
+        #modalText { font-size: 15px; color: #aaa; margin-bottom: 30px; line-height: 1.6; }
+        .btn {
+            background: linear-gradient(45deg, #222, #333); color: white;
+            border: 1px solid #555; padding: 12px 30px; font-size: 14px;
+            border-radius: 6px; cursor: pointer; text-transform: uppercase;
+            letter-spacing: 1px; transition: all 0.3s; font-weight: bold;
+        }
+        .btn:hover { background: #fff; color: #000; border-color: #fff; }
+
+        /* Damage Overlay */
+        #damageOverlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, transparent 40%, rgba(255,0,0,0.4) 100%);
+            opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.2s;
+        }
+
+        /* Mobile Controls */
+        #mobileControls {
+            display: none; position: absolute; bottom: 30px; left: 30px; z-index: 30;
+        }
+        .joystick-base {
+            width: 120px; height: 120px; background: rgba(255,255,255,0.1);
+            border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);
+            position: relative;
+        }
+        .joystick-stick {
+            width: 50px; height: 50px; background: rgba(255,255,255,0.4);
+            border-radius: 50%; position: absolute; top: 35px; left: 35px;
+        }
+        #mobileAction {
+            display: none; position: absolute; bottom: 30px; right: 30px; z-index: 30;
+            width: 80px; height: 80px; background: rgba(255, 0, 85, 0.3);
+            border-radius: 50%; border: 2px solid var(--accent);
+            color: white; font-weight: bold; text-align: center; line-height: 80px;
+        }
+
+        @media (max-width: 768px) {
+            #mobileControls, #mobileAction { display: block; }
+            .ui-panel { font-size: 10px; padding: 8px 12px; }
+            #hud span { font-size: 14px; }
+            #modalBox { width: 85%; padding: 25px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- UI Overlay -->
+    <canvas id="gameCanvas"></canvas>
+    <div id="crosshair"></div>
+    <div id="damageOverlay"></div>
+    
+    <div id="hud" class="ui-panel">
+        Chapter <span id="uiChapter">I : The Awakening</span>
+        Artifacts <span id="uiArtifacts">0 / 3</span>
+        Power <span id="uiPower">1.0x</span>
+    </div>
+
+    <div id="hintBtn" class="ui-panel">AI Agent (Hint)</div>
+    <div id="storeBtn" class="ui-panel">Premium Vault</div>
+
+    <!-- Custom Modal System -->
+    <div id="modalOverlay">
+        <div id="modalBox">
+            <h1 id="modalTitle">The IAH: Samsara</h1>
+            <p id="modalText">Explore the corrupted real-world simulation generated by the ancient Asura. <br><br><b>Controls:</b> WASD to Move, Mouse to Look, Left Click to Shoot. Collect glowing artifacts to break the cycle and advance chapters.</p>
+            <button class="btn" id="startBtn">Enter Samsara</button>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobileControls">
+        <div class="joystick-base" id="joystickMove">
+            <div class="joystick-stick" id="stickMove"></div>
+        </div>
+    </div>
+    <div id="mobileAction">SHOOT</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <!-- Tone.js for Audio processing (No external URLs used) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <script>
+        // Game State Variables
+        let chapter = 1;
+        let artifactsCollected = 0;
+        let artifactsRequired = 3;
+        let playerPower = 1.0;
+        let playerHealth = 100;
+        let isGameRunning = false;
+        
+        // Environment Size constraints based on chapter (increases exploration time)
+        let worldBounds = 300; 
+
+        // DOM Elements
+        const uiChapter = document.getElementById('uiChapter');
+        const uiArtifacts = document.getElementById('uiArtifacts');
+        const uiPower = document.getElementById('uiPower');
+        const damageOverlay = document.getElementById('damageOverlay');
+
+        // Three.js Setup
+        const canvas = document.getElementById('gameCanvas');
+        const scene = new THREE.Scene();
+        
+        // AAA Vibe: Mystical dark fog fusing Japanese Sakura night with Indian ancient stone
+        scene.background = new THREE.Color(0x0a0510);
+        scene.fog = new THREE.FogExp2(0x0a0510, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimize for high DPI
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting (Cinematic)
+        const ambientLight = new THREE.AmbientLight(0x222233, 1.5);
+        scene.add(ambientLight);
+        
+        const moonLight = new THREE.DirectionalLight(0xaaccff, 0.8);
+        moonLight.position.set(100, 200, 50);
+        moonLight.castShadow = true;
+        moonLight.shadow.camera.left = -200;
+        moonLight.shadow.camera.right = 200;
+        moonLight.shadow.camera.top = 200;
+        moonLight.shadow.camera.bottom = -200;
+        scene.add(moonLight);
+
+        // Player Controls (Desktop PointerLock)
+        const controls = new THREE.PointerLockControls(camera, document.body);
+        scene.add(controls.getObject());
+        controls.getObject().position.set(0, 4, 0);
+
+        // Physics & Movement Variables
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const moveState = { forward: false, backward: false, left: false, right: false };
+        const speed = 150.0;
+        
+        // Mobile variables
+        let isMobile = window.innerWidth <= 768;
+        let touchMoveX = 0; let touchMoveY = 0;
+        
+        // Game Objects Arrays
+        const collidableObjects = [];
+        const enemies = [];
+        const artifacts = [];
+        const projectiles = [];
+
+        // We synthesize audio procedurally to avoid external URLs and give a unique vibe
+        let synthBGM, synthAction, noiseSynth;
+        
+        function initAudio() {
+            Tone.start();
+            
+            // Mystical Drone BGM (Ancient Indian / Japanese fusion vibe)
+            synthBGM = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 0.5,
+                modulationIndex: 1.2,
+                oscillator: { type: "sine" },
+                modulation: { type: "triangle" },
+                envelope: { attack: 2, decay: 2, sustain: 0.8, release: 2 }
+            }).toDestination();
+            synthBGM.volume.value = -15;
+
+            // Arpeggio pattern for mysterious exploration
+            const pattern = new Tone.Pattern(function(time, note){
+                synthBGM.triggerAttackRelease(note, "4n", time);
+            }, ["C3", "Eb3", "G3", "Bb3", "D4", "F4", "Eb4", "G3"], "randomWalk");
+            pattern.interval = "8n";
+            
+            // Start BGM loop
+            Tone.Transport.start();
+            pattern.start(0);
+
+            // SFX Synths
+            synthAction = new Tone.MembraneSynth().toDestination();
+            synthAction.volume.value = -5;
+            
+            noiseSynth = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+            }).toDestination();
+            noiseSynth.volume.value = -10;
+        }
+
+        function playShootSound() {
+            if(synthAction) synthAction.triggerAttackRelease("C2", "8n");
+        }
+        function playHitSound() {
+            if(noiseSynth) noiseSynth.triggerAttackRelease("16n");
+        }
+        function playCollectSound() {
+            if(synthBGM) synthBGM.triggerAttackRelease(["C5", "E5", "G5"], "4n");
+        }
+        
+        
+        // Ground
+        const floorGeo = new THREE.PlaneGeometry(2000, 2000, 64, 64);
+        // Perturb vertices for uneven terrain
+        const pos = floorGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            pos.setZ(i, Math.sin(pos.getX(i)*0.1) * Math.cos(pos.getY(i)*0.1) * 2);
+        }
+        floorGeo.computeVertexNormals();
+        
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0x111620, 
+            roughness: 0.8, 
+            metalness: 0.2,
+            flatShading: true 
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Architecture Generators
+        function createToriiGate(x, z, rotation) {
+            const group = new THREE.Group();
+            const redMat = new THREE.MeshStandardMaterial({ color: 0xaa1111, roughness: 0.6 });
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+            
+            // Pillars
+            const pillarGeo = new THREE.CylinderGeometry(1, 1, 15, 8);
+            const p1 = new THREE.Mesh(pillarGeo, redMat); p1.position.set(-6, 7.5, 0); p1.castShadow = true;
+            const p2 = new THREE.Mesh(pillarGeo, redMat); p2.position.set(6, 7.5, 0); p2.castShadow = true;
+            
+            // Beams
+            const beam1Geo = new THREE.BoxGeometry(16, 1.5, 1.5);
+            const b1 = new THREE.Mesh(beam1Geo, redMat); b1.position.set(0, 13, 0); b1.castShadow = true;
+            
+            const beam2Geo = new THREE.BoxGeometry(18, 2, 2);
+            const b2 = new THREE.Mesh(beam2Geo, blackMat); b2.position.set(0, 15, 0);
+            // Curve the top beam slightly
+            b2.geometry.translate(0,-1,0);
+            const pos = b2.geometry.attributes.position;
+            for(let i=0; i<pos.count; i++) {
+                let px = pos.getX(i);
+                pos.setY(i, pos.getY(i) + (px*px)*0.005);
+            }
+            b2.geometry.computeVertexNormals();
+            b2.castShadow = true;
+            
+            group.add(p1, p2, b1, b2);
+            group.position.set(x, 0, z);
+            group.rotation.y = rotation;
+            
+            scene.add(group);
+            
+            // Add collision bounds (invisible box)
+            const colGeo = new THREE.BoxGeometry(14, 15, 2);
+            const colMesh = new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({visible:false}));
+            colMesh.position.set(x, 7.5, z);
+            colMesh.rotation.y = rotation;
+            scene.add(colMesh);
+            collidableObjects.push(colMesh);
+        }
+
+        function createAncientPillar(x, z) {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x444433, roughness: 0.9, metalness: 0.1 });
+            // Indian-style ornate pillar base
+            const baseGeo = new THREE.BoxGeometry(3, 2, 3);
+            const base = new THREE.Mesh(baseGeo, mat); base.position.y = 1;
+            
+            const shaftGeo = new THREE.CylinderGeometry(1, 1.2, 10, 8);
+            const shaft = new THREE.Mesh(shaftGeo, mat); shaft.position.y = 7;
+            
+            const topGeo = new THREE.BoxGeometry(3.5, 1.5, 3.5);
+            const top = new THREE.Mesh(topGeo, mat); top.position.y = 12.75;
+            
+            const group = new THREE.Group();
+            group.add(base, shaft, top);
+            group.position.set(x, 0, z);
+            
+            // Adding a glowing rune/gem on some pillars
+            if(Math.random() > 0.5) {
+                const gemGeo = new THREE.OctahedronGeometry(0.5);
+                const gemMat = new THREE.MeshBasicMaterial({ color: varPrimaryColorHex() });
+                const gem = new THREE.Mesh(gemGeo, gemMat);
+                gem.position.set(0, 14, 0);
+                group.add(gem);
+            }
+            
+            scene.add(group);
+            
+            const colGeo = new THREE.BoxGeometry(3.5, 15, 3.5);
+            const colMesh = new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({visible:false}));
+            colMesh.position.set(x, 7.5, z);
+            scene.add(colMesh);
+            collidableObjects.push(colMesh);
+        }
+        
+        function varPrimaryColorHex() { return 0x00ffcc; }
+        function varAccentColorHex() { return 0xff0055; }
+
+        function createArtifact(x, z) {
+            const geo = new THREE.IcosahedronGeometry(1.5, 0);
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: varPrimaryColorHex(), emissive: varPrimaryColorHex(), emissiveIntensity: 0.8, wireframe: true 
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, 4, z);
+            
+            // Add point light for glow
+            const light = new THREE.PointLight(varPrimaryColorHex(), 2, 20);
+            mesh.add(light);
+            
+            scene.add(mesh);
+            artifacts.push(mesh);
+        }
+
+        class HumanoidEnemy {
+            constructor(x, z, healthMultiplier) {
+                this.group = new THREE.Group();
+                this.health = 50 * healthMultiplier;
+                this.maxHealth = this.health;
+                this.speed = 10 + (Math.random() * 10);
+                this.state = 'patrol'; // patrol, chase, attack
+                
+                // Emissive glowing material (ghostly minion of Asura)
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: varAccentColorHex(), emissive: varAccentColorHex(), 
+                    emissiveIntensity: 0.4, transparent: true, opacity: 0.8 
+                });
+                
+                // Head
+                this.head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), mat);
+                this.head.position.y = 5.5;
+                // Torso (Angular, aggressive)
+                this.torso = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.6, 3, 4), mat);
+                this.torso.position.y = 3.5;
+                // Floating limbs
+                this.armL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2, 0.5), mat);
+                this.armL.position.set(-1.8, 4, 0);
+                this.armR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2, 0.5), mat);
+                this.armR.position.set(1.8, 4, 0);
+                
+                this.group.add(this.head, this.torso, this.armL, this.armR);
+                this.group.position.set(x, 1, z);
+                scene.add(this.group);
+                
+                // Target Waypoint for random movement
+                this.targetPoint = new THREE.Vector3(x + (Math.random()*40-20), 1, z + (Math.random()*40-20));
+                
+                // Collision Box
+                this.boundingBox = new THREE.Box3();
+            }
+
+            update(delta, playerPos) {
+                // Hover animation
+                const time = Date.now() * 0.003;
+                this.head.position.y = 5.5 + Math.sin(time) * 0.2;
+                this.armL.rotation.x = Math.sin(time * 1.5) * 0.5;
+                this.armR.rotation.x = -Math.sin(time * 1.5) * 0.5;
+
+                const distToPlayer = this.group.position.distanceTo(playerPos);
+
+                // State Machine
+                if (distToPlayer < 40) {
+                    this.state = 'chase';
+                } else {
+                    this.state = 'patrol';
+                }
+
+                if (this.state === 'chase') {
+                    this.targetPoint.copy(playerPos);
+                    // Attack logic
+                    if (distToPlayer < 5) {
+                        playerTakeDamage(10 * delta); // Continuous drain if too close
+                    }
+                } else if (this.state === 'patrol') {
+                    // Random movement - change target if close
+                    if (this.group.position.distanceTo(this.targetPoint) < 2) {
+                        this.targetPoint.set(
+                            this.group.position.x + (Math.random()*60-30),
+                            1,
+                            this.group.position.z + (Math.random()*60-30)
+                        );
+                    }
+                }
+
+                // Move towards target
+                const dir = new THREE.Vector3().subVectors(this.targetPoint, this.group.position).normalize();
+                this.group.position.addScaledVector(dir, this.speed * delta);
+                
+                // Look at target (smooth rotation)
+                const targetRotation = Math.atan2(dir.x, dir.z);
+                this.group.rotation.y = targetRotation;
+
+                this.boundingBox.setFromObject(this.group);
+            }
+
+            takeDamage(amount) {
+                this.health -= amount;
+                // Flash white
+                this.head.material.emissiveIntensity = 1.0;
+                setTimeout(() => {
+                    if(this.head) this.head.material.emissiveIntensity = 0.4;
+                }, 100);
+
+                if (this.health <= 0) {
+                    scene.remove(this.group);
+                    return true; // Is dead
+                }
+                return false;
+            }
+        }
+
+        function generateWorld(chap) {
+            // Clear old level
+            collidableObjects.forEach(obj => scene.remove(obj));
+            collidableObjects.length = 0;
+            artifacts.forEach(obj => scene.remove(obj));
+            artifacts.length = 0;
+            enemies.forEach(e => scene.remove(e.group));
+            enemies.length = 0;
+            
+            // Expand world bounds per chapter
+            worldBounds = 200 + (chap * 100); 
+            artifactsRequired = 3 + chap;
+            artifactsCollected = 0;
+            updateHUD();
+
+            const density = 0.002;
+            const area = worldBounds * worldBounds * 4;
+            const objCount = Math.floor(area * density);
+
+            for(let i=0; i<objCount; i++) {
+                const x = (Math.random() - 0.5) * worldBounds * 2;
+                const z = (Math.random() - 0.5) * worldBounds * 2;
+                
+                // Keep center clear for spawning
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
+
+                if (Math.random() > 0.7) {
+                    createToriiGate(x, z, Math.random() * Math.PI);
+                } else {
+                    createAncientPillar(x, z);
+                }
+            }
+
+            // Spawn Artifacts at random locations
+            for(let i=0; i<artifactsRequired; i++) {
+                const x = (Math.random() - 0.5) * (worldBounds * 1.5);
+                const z = (Math.random() - 0.5) * (worldBounds * 1.5);
+                createArtifact(x, z);
+            }
+
+            // Spawn Enemies (number scales with chapter)
+            const enemyCount = 5 + (chap * 3);
+            for(let i=0; i<enemyCount; i++) {
+                const x = (Math.random() - 0.5) * worldBounds;
+                const z = (Math.random() - 0.5) * worldBounds;
+                if(Math.abs(x) > 30 || Math.abs(z) > 30) {
+                    enemies.push(new HumanoidEnemy(x, z, chap * 0.5 + 0.5));
+                }
+            }
+
+            // Update UI Colors to show progression
+            scene.fog.color.setHSL((chap * 0.1) % 1.0, 0.6, 0.05);
+            scene.background.copy(scene.fog.color);
+        }
+
+        function fireWeapon() {
+            if (!isGameRunning) return;
+            playShootSound();
+
+            const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+            
+            // Start at camera pos
+            bullet.position.copy(controls.getObject().position);
+            
+            // Get camera direction
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            
+            projectiles.push({
+                mesh: bullet,
+                dir: dir,
+                life: 2.0 // Seconds to live
+            });
+            scene.add(bullet);
+        }
+
+        function checkShootingHits(delta) {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.mesh.position.addScaledVector(p.dir, 300 * delta); // Bullet speed
+                p.life -= delta;
+
+                let hit = false;
+                const pBox = new THREE.Box3().setFromObject(p.mesh);
+
+                // Check enemies
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (pBox.intersectsBox(enemies[j].boundingBox)) {
+                        hit = true;
+                        playHitSound();
+                        const isDead = enemies[j].takeDamage(25 * playerPower);
+                        if (isDead) enemies.splice(j, 1);
+                        break;
+                    }
+                }
+
+                // Check walls (simple distance check for performance)
+                if(!hit) {
+                    for(let col of collidableObjects) {
+                        if(p.mesh.position.distanceTo(col.position) < 8) {
+                            hit = true; break;
+                        }
+                    }
+                }
+
+                if (hit || p.life <= 0) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                }
+            }
+        }
+
+        function checkArtifactCollection() {
+            const playerPos = controls.getObject().position;
+            for(let i = artifacts.length - 1; i >= 0; i--) {
+                const art = artifacts[i];
+                // Rotate animation
+                art.rotation.y += 0.02;
+                art.rotation.x += 0.01;
+
+                if (playerPos.distanceTo(art.position) < 5) {
+                    scene.remove(art);
+                    artifacts.splice(i, 1);
+                    artifactsCollected++;
+                    playerPower += 0.2; // Gain power
+                    playCollectSound();
+                    updateHUD();
+
+                    if (artifactsCollected >= artifactsRequired) {
+                        advanceChapter();
+                    }
+                }
+            }
+        }
+
+        function advanceChapter() {
+            chapter++;
+            showModal(`Cycle Completed`, `The Asura's simulation adapts. You have entered Chapter ${chapter}. The world expands. Enemies grow stronger.`);
+            controls.getObject().position.set(0, 4, 0); // Reset position silently
+            generateWorld(chapter);
+        }
+
+        function playerTakeDamage(amount) {
+            playerHealth -= amount;
+            damageOverlay.style.opacity = 1;
+            setTimeout(() => { damageOverlay.style.opacity = 0; }, 100);
+            
+            if(playerHealth <= 0) {
+                showModal("Samsara Reset", "Your physical form collapsed. The cycle begins anew, but you retain your knowledge.");
+                playerHealth = 100;
+                // Soft reset (infinite loop logic)
+                controls.getObject().position.set(0, 4, 0);
+            }
+        }
+
+        function updateHUD() {
+            uiChapter.innerText = `${chapter} : Iteration`;
+            uiArtifacts.innerText = `${artifactsCollected} / ${artifactsRequired}`;
+            uiPower.innerText = `${playerPower.toFixed(1)}x`;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if(!isGameRunning) return;
+            switch (e.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyD': moveState.right = true; break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.tagName !== 'BUTTON' && isGameRunning && !isMobile) {
+                if(!controls.isLocked) controls.lock();
+                else if (e.button === 0) fireWeapon();
+            }
+        });
+        
+        // Mobile Touch Implementation
+        const joyBase = document.getElementById('joystickMove');
+        const joyStick = document.getElementById('stickMove');
+        const actionBtn = document.getElementById('mobileAction');
+        let joyCenterX, joyCenterY, isDraggingJoy = false;
+
+        joyBase.addEventListener('touchstart', (e) => {
+            isDraggingJoy = true;
+            const rect = joyBase.getBoundingClientRect();
+            joyCenterX = rect.left + rect.width / 2;
+            joyCenterY = rect.top + rect.height / 2;
+            handleJoystick(e.touches[0]);
+        });
+        joyBase.addEventListener('touchmove', (e) => {
+            if(isDraggingJoy) handleJoystick(e.touches[0]);
+        });
+        joyBase.addEventListener('touchend', () => {
+            isDraggingJoy = false;
+            joyStick.style.transform = `translate(0px, 0px)`;
+            touchMoveX = 0; touchMoveY = 0;
+        });
+
+        function handleJoystick(touch) {
+            let dx = touch.clientX - joyCenterX;
+            let dy = touch.clientY - joyCenterY;
+            const maxDist = 35;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist > maxDist) {
+                dx = (dx/dist) * maxDist;
+                dy = (dy/dist) * maxDist;
+            }
+            joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
+            // Normalize for movement logic
+            touchMoveX = dx / maxDist; 
+            touchMoveY = dy / maxDist;
+        }
+        
+        // Right side screen touch for looking (Mobile)
+        let lastTouchX = 0, lastTouchY = 0;
+        document.addEventListener('touchstart', (e) => {
+            if(isMobile && e.touches[0].clientX > window.innerWidth/2 && e.target !== actionBtn) {
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+            }
+        });
+        document.addEventListener('touchmove', (e) => {
+            if(isMobile && e.touches[0].clientX > window.innerWidth/2 && isGameRunning) {
+                const dx = e.touches[0].clientX - lastTouchX;
+                const dy = e.touches[0].clientY - lastTouchY;
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.setFromQuaternion(camera.quaternion);
+                euler.y -= dx * 0.005;
+                euler.x -= dy * 0.005;
+                euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
+                camera.quaternion.setFromEuler(euler);
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+            }
+        });
+
+        actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); fireWeapon(); });
+
+        function showModal(title, text, buttonText = "Continue") {
+            isGameRunning = false;
+            if(controls.isLocked) controls.unlock();
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalText').innerHTML = text;
+            document.getElementById('startBtn').innerText = buttonText;
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('modalOverlay').style.display = 'none';
+            if(!synthBGM) initAudio(); // Start audio context on first user interaction
+            isGameRunning = true;
+            if(!isMobile) controls.lock();
+        });
+
+        document.getElementById('hintBtn').addEventListener('click', () => {
+            showModal("AI Agent Insight", `Observation: The Asura minion behavior adapts in Chapter ${chapter}.<br><br>Strategy: Keep moving randomly to avoid their attacks. Collect the glowing artifacts to force a structural reset of this realm. Avoid edges past ${worldBounds} meters.`);
+        });
+
+        document.getElementById('storeBtn').addEventListener('click', () => {
+            showModal("Premium Vault (GBP/CHF/USD)", "Exclusive Cosmetic Upgrades coming in v2.0.<br><br>Current balance: 0. Acquire more artifacts to unlock trade capability.");
+        });
+
+        let prevTime = performance.now();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1); // Cap delta to prevent huge jumps
+            
+            if (isGameRunning) {
+                // Movement Logic (Combines WASD and Touch Joystick)
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                let dZ = Number(moveState.forward) - Number(moveState.backward) - touchMoveY;
+                let dX = Number(moveState.right) - Number(moveState.left) + touchMoveX;
+                
+                direction.z = dZ;
+                direction.x = dX;
+                direction.normalize(); 
+
+                if (moveState.forward || moveState.backward || Math.abs(touchMoveY) > 0.1) velocity.z -= direction.z * speed * delta;
+                if (moveState.left || moveState.right || Math.abs(touchMoveX) > 0.1) velocity.x -= direction.x * speed * delta;
+
+                // Simple Collision Detection
+                const playerPos = controls.getObject().position.clone();
+                playerPos.x += velocity.x * delta * -1;
+                playerPos.z += velocity.z * delta * -1;
+                
+                let collision = false;
+                for(let col of collidableObjects) {
+                    if (playerPos.distanceTo(col.position) < 4) {
+                        collision = true; break;
+                    }
+                }
+                
+                if(!collision) {
+                    controls.moveRight(-velocity.x * delta);
+                    controls.moveForward(-velocity.z * delta);
+                }
+
+                // Keep y locked
+                controls.getObject().position.y = 4;
+
+                // Infinite Boundary Wrap
+                const p = controls.getObject().position;
+                if(Math.abs(p.x) > worldBounds*1.5 || Math.abs(p.z) > worldBounds*1.5) {
+                    p.x = 0; p.z = 0; // Wrap around to center
+                    playerTakeDamage(10); // Penalty for hitting the simulation wall
+                }
+
+                // Update Enemies
+                const curPos = controls.getObject().position;
+                for(let enemy of enemies) {
+                    enemy.update(delta, curPos);
+                }
+
+                // Update Systems
+                checkShootingHits(delta);
+                checkArtifactCollection();
+            }
+            
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        // Initialize First World
+        generateWorld(chapter);
+        animate();
+
+        // Window Resize Handle
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            isMobile = window.innerWidth <= 768;
+        });
+
+    </script>
+</body>
+</html>
