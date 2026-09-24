@@ -278,7 +278,8 @@
         let currentWeaponIndex = 0; // 0: Katana, 1: Arc Bow, 2: Chakra Orb
         let isAttacking = false;
         let attackCooldown = false;
-        let weaponSwingAngle = 0;
+        let weaponAnimTimer = 0;
+        let weaponAnimDuration = 0;
 
         // Arrays for Game Logic
         let runes = [];
@@ -769,6 +770,11 @@
         function triggerAttack() {
             if (!isGameRunning || attackCooldown) return;
             attackCooldown = true;
+            
+            // Start Weapon Animation Sequence
+            weaponAnimTimer = currentWeaponIndex === 0 ? 0.3 : (currentWeaponIndex === 1 ? 0.35 : 0.6);
+            weaponAnimDuration = weaponAnimTimer;
+
             playWeaponSound(currentWeaponIndex === 0 ? 'katana' : currentWeaponIndex === 1 ? 'bow' : 'orb');
 
             // Katana Melee Slash Arc Effect
@@ -1073,6 +1079,39 @@
                 // Weapon Sway
                 weaponGroup.position.x = Math.sin(time * 0.005) * 0.02;
                 weaponGroup.position.y = Math.cos(time * 0.005) * 0.02;
+
+                // Weapon Animation (Swing / Recoil / Pulse)
+                if (weaponAnimTimer > 0) {
+                    weaponAnimTimer -= delta;
+                    if (weaponAnimTimer < 0) weaponAnimTimer = 0;
+                    let progress = 1 - (weaponAnimTimer / weaponAnimDuration);
+                    
+                    if (currentWeaponIndex === 0) {
+                        // Katana Slash Animation
+                        let angle = Math.sin(progress * Math.PI);
+                        katanaMesh.rotation.x = 0.2 + (angle * -1.2); 
+                        katanaMesh.rotation.y = -0.3 + (angle * 0.6); 
+                        katanaMesh.rotation.z = -0.4 + (angle * -1.8);
+                        katanaMesh.position.z = -0.6 + (angle * -0.3); // Thrust forward
+                    } else if (currentWeaponIndex === 1) {
+                        // Bow Recoil Animation
+                        let recoil = Math.sin(progress * Math.PI);
+                        bowMesh.position.z = -0.7 + (recoil * 0.3);
+                        bowMesh.rotation.x = recoil * 0.2;
+                    } else if (currentWeaponIndex === 2) {
+                        // Orb Casting Animation
+                        let pulse = Math.sin(progress * Math.PI);
+                        orbMesh.scale.set(1 + pulse * 0.4, 1 + pulse * 0.4, 1 + pulse * 0.4);
+                        orbMesh.rotation.y += delta * 15;
+                    }
+                } else {
+                    // Reset to resting positions
+                    katanaMesh.rotation.set(0.2, -0.3, -0.4);
+                    katanaMesh.position.set(0.4, -0.3, -0.6);
+                    bowMesh.position.z = -0.7;
+                    bowMesh.rotation.x = 0;
+                    orbMesh.scale.set(1, 1, 1);
+                }
 
                 // Check Sanctum
                 checkSanctuaryZone(playerPos);
